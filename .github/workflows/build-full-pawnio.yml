@@ -9,7 +9,9 @@ on:
 
 jobs:
   build_x64:
-    runs-on: windows-latest
+    # 固定用 windows-2022（VS2022 + v143）：windows-latest 已指向 VS2026 镜像，
+    # 默认工具集变成 v144，与本工程的 PlatformToolset=v143 不一致。
+    runs-on: windows-2022
     name: Release x64 (with hardware monitoring)
 
     steps:
@@ -18,36 +20,51 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # C++/CLI（OpenHardwareMonitorApi 是 /clr 工程）和 .NET Framework 4.7.2 目标包
-      # 在 hosted runner 上不保证预装，缺了会直接编译失败，这里按需补装。
-      - name: Ensure C++/CLI and .NET Framework 4.7.2 targeting pack
+      # 本工程需要三样 hosted runner 默认不装的东西：
+      #   MFC（TrafficMonitor 是 MFC 程序，OpenHardwareMonitorApi 的 app.rc 还要 afxres.h）
+      #   C++/CLI（OpenHardwareMonitorApi 是 /clr 工程）
+      #   .NET Framework 4.7.2 目标包
+      - name: Ensure MFC / C++/CLI / .NET Framework 4.7.2
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           if (-not (Test-Path $vswhere)) { throw "vswhere not found" }
 
+          $needMfc   = -not (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATLMFC -property installationPath)
           $needCli   = -not (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.CLI.Support -property installationPath)
           $needNetFx = -not (& $vswhere -latest -products * -requires Microsoft.Net.Component.4.7.2.TargetingPack -property installationPath)
-          Write-Host "need C++/CLI: $needCli ; need .NET 4.7.2 pack: $needNetFx"
+          Write-Host "need MFC: $needMfc ; need C++/CLI: $needCli ; need .NET 4.7.2 pack: $needNetFx"
 
-          if ($needCli -or $needNetFx) {
+          if ($needMfc -or $needCli -or $needNetFx) {
             $installPath = & $vswhere -latest -products * -property installationPath
+            Write-Host "VS: $installPath"
             $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-            $args = @('modify', '--installPath', "`"$installPath`"", '--quiet', '--norestart', '--nocache')
-            if ($needCli)   { $args += @('--add', 'Microsoft.VisualStudio.Component.VC.CLI.Support') }
-            if ($needNetFx) { $args += @('--add', 'Microsoft.Net.Component.4.7.2.TargetingPack') }
-            Write-Host "running: vs_installer $($args -join ' ')"
-            Start-Process -FilePath $installer -ArgumentList $args -Wait -NoNewWindow
-            Write-Host "vs_installer finished"
+            $vsArgs = @('modify', '--installPath', "`"$installPath`"", '--quiet', '--norestart', '--nocache')
+            if ($needMfc)   { $vsArgs += @('--add', 'Microsoft.VisualStudio.Component.VC.ATLMFC') }
+            if ($needCli)   { $vsArgs += @('--add', 'Microsoft.VisualStudio.Component.VC.CLI.Support') }
+            if ($needNetFx) { $vsArgs += @('--add', 'Microsoft.Net.Component.4.7.2.TargetingPack') }
+            Write-Host "running: vs_installer $($vsArgs -join ' ')"
+            $p = Start-Process -FilePath $installer -ArgumentList $vsArgs -Wait -NoNewWindow -PassThru
+            Write-Host "vs_installer exit code: $($p.ExitCode)"
           }
 
       - name: Show toolset info
         shell: pwsh
         run: |
           msbuild -version
-          Write-Host "--- 4.7.2 reference assemblies ---"
-          Get-ChildItem "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework" -Directory |
-            Select-Object -ExpandProperty Name
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          Write-Host "--- VS instances ---"
+          & $vswhere -products * -format value -property installationPath
+          Write-Host "--- required components present? ---"
+          foreach ($c in @('Microsoft.VisualStudio.Component.VC.ATLMFC',
+                           'Microsoft.VisualStudio.Component.VC.CLI.Support',
+                           'Microsoft.Net.Component.4.7.2.TargetingPack')) {
+            $ok = & $vswhere -latest -products * -requires $c -property installationPath
+            Write-Host ("{0,-60} {1}" -f $c, [bool]$ok)
+          }
+          Write-Host "--- MFC headers ---"
+          Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\atlmfc\include\afxres.h" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
 
       - name: Build standard configuration (Release x64)
         run: msbuild TrafficMonitor.sln -m -p:configuration=Release -p:platform=x64 -p:platformToolset=v143 -verbosity:minimal
