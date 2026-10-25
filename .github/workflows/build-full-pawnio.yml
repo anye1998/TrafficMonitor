@@ -1,0 +1,114 @@
+name: Build (full, PawnIO)
+
+# 标准版 = 含温度监控/硬件监控（TrafficMonitor.sln 的 Release 配置）。
+# 上游 main.yml 只编 TrafficMonitor_Lite.sln（不含温度），所以这里单独编标准版。
+on:
+  workflow_dispatch:
+  push:
+    tags: ['build-*']
+
+jobs:
+  build_x64:
+    runs-on: windows-latest
+    name: Release x64 (with hardware monitoring)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # C++/CLI（OpenHardwareMonitorApi 是 /clr 工程）和 .NET Framework 4.7.2 目标包
+      # 在 hosted runner 上不保证预装，缺了会直接编译失败，这里按需补装。
+      - name: Ensure C++/CLI and .NET Framework 4.7.2 targeting pack
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "vswhere not found" }
+
+          $needCli   = -not (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.CLI.Support -property installationPath)
+          $needNetFx = -not (& $vswhere -latest -products * -requires Microsoft.Net.Component.4.7.2.TargetingPack -property installationPath)
+          Write-Host "need C++/CLI: $needCli ; need .NET 4.7.2 pack: $needNetFx"
+
+          if ($needCli -or $needNetFx) {
+            $installPath = & $vswhere -latest -products * -property installationPath
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            $args = @('modify', '--installPath', "`"$installPath`"", '--quiet', '--norestart', '--nocache')
+            if ($needCli)   { $args += @('--add', 'Microsoft.VisualStudio.Component.VC.CLI.Support') }
+            if ($needNetFx) { $args += @('--add', 'Microsoft.Net.Component.4.7.2.TargetingPack') }
+            Write-Host "running: vs_installer $($args -join ' ')"
+            Start-Process -FilePath $installer -ArgumentList $args -Wait -NoNewWindow
+            Write-Host "vs_installer finished"
+          }
+
+      - name: Show toolset info
+        shell: pwsh
+        run: |
+          msbuild -version
+          Write-Host "--- 4.7.2 reference assemblies ---"
+          Get-ChildItem "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework" -Directory |
+            Select-Object -ExpandProperty Name
+
+      - name: Build standard configuration (Release x64)
+        run: msbuild TrafficMonitor.sln -m -p:configuration=Release -p:platform=x64 -p:platformToolset=v143 -verbosity:minimal
+
+      - name: Assemble output (exe + all runtime dependencies)
+        shell: pwsh
+        run: |
+          $out = "Bin/x64/Release"
+          if (-not (Test-Path "$out/TrafficMonitor.exe")) { throw "TrafficMonitor.exe not produced at $out" }
+          # 把 PawnIO 版依赖补齐（其中 LibreHardwareMonitorLib.dll 与工程引用的是同一个文件）
+          Copy-Item "HardwareMonitor-PawnIO/files/*.dll" $out -Force
+          Get-ChildItem $out -File | Sort-Object Name | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+
+      - name: Sanity checks
+        shell: pwsh
+        run: |
+          $err = 0
+          $out = "Bin/x64/Release"
+
+          # 1) 不能有 WinRing0
+          $dllBytes = [System.IO.File]::ReadAllBytes("$out/LibreHardwareMonitorLib.dll")
+          $dllText  = [System.Text.Encoding]::ASCII.GetString($dllBytes)
+          if ($dllText.Contains('WinRing0')) { Write-Host "FAIL: WinRing0 reference found"; $err++ }
+          else { Write-Host "OK: no WinRing0 reference" }
+          if ($dllText.Contains('PawnIO')) { Write-Host "OK: PawnIO backend present" }
+          else { Write-Host "FAIL: PawnIO not found"; $err++ }
+
+          # 2) 依赖程序集版本必须精确匹配（强名称程序集按版本绑定）
+          $expected = @{
+            'LibreHardwareMonitorLib'                = '0.9.6.0'
+            'System.Memory'                          = '4.0.5.0'
+            'System.Buffers'                         = '4.0.5.0'
+            'System.Numerics.Vectors'                = '4.1.6.0'
+            'System.Runtime.CompilerServices.Unsafe' = '6.0.3.0'
+            'DiskInfoToolkit'                        = '1.1.2.0'
+            'RAMSPDToolkit-NDD'                      = '1.4.2.0'
+            'BlackSharp.Core'                        = '1.0.7.0'
+            'HidSharp'                               = '2.6.4.0'
+          }
+          foreach ($k in $expected.Keys) {
+            $p = Join-Path $out "$k.dll"
+            if (-not (Test-Path $p)) { Write-Host "FAIL: missing $k.dll"; $err++; continue }
+            $v = [System.Reflection.AssemblyName]::GetAssemblyName($p).Version.ToString()
+            if ($v -eq $expected[$k]) { Write-Host "OK: $k $v" }
+            else { Write-Host "FAIL: $k expected $($expected[$k]) got $v"; $err++ }
+          }
+
+          # 3) 主程序必须是标准版（导入 OpenHardwareMonitorApi 而非 Lite）
+          $exe = "$out/TrafficMonitor.exe"
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if ($ascii.Contains('OpenHardwareMonitorApi')) { Write-Host "OK: exe references OpenHardwareMonitorApi (standard build)" }
+          else { Write-Host "FAIL: exe does not reference OpenHardwareMonitorApi (lite build?)"; $err++ }
+          if (-not (Test-Path "$out/OpenHardwareMonitorApi.dll")) { Write-Host "FAIL: OpenHardwareMonitorApi.dll missing"; $err++ }
+          else { Write-Host "OK: OpenHardwareMonitorApi.dll present" }
+
+          if ($err -ne 0) { throw "$err sanity check(s) failed" }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrafficMonitor_x64_full_pawnio
+          path: Bin/x64/Release/**
+          if-no-files-found: error
