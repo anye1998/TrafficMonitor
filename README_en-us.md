@@ -23,6 +23,13 @@ driver backend has been hardened.
 - Change log (Chinese): [本 Fork 修改记录](./README.md#本-fork-修改记录)
 - Deployment payload: [`HardwareMonitor-PawnIO/`](./HardwareMonitor-PawnIO)
 - Downloads: [Releases](https://github.com/anye1998/TrafficMonitor/releases)
+  - `TrafficMonitor_V1.86-pawnio_x64.zip` — full build, hardware monitoring built in, manifest `requireAdministrator`
+  - `TrafficMonitor_V1.86-pawnio_x64_Lite.zip` — lite build, no built-in hardware monitoring, manifest `asInvoker`
+    (no UAC prompt); hardware data comes from the `plugins\HardwareMonitor.dll` plugin
+
+Both builds are produced by GitHub Actions and no longer contain WinRing0 (zero `WinRing0` string hits, no `.sys`
+is dropped at runtime). The `HardwareMonitor` plugin does **not** depend on the built-in hardware monitoring, so the
+Lite build still shows CPU temperature and power on the machine this fork was validated on.
 
 > These changes were analysed, implemented and committed by an **AI assistant (WorkBuddy)**; the human maintainer
 > only verified the runtime behaviour. This fork is unrelated to the upstream project — please use this fork's

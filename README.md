@@ -19,8 +19,9 @@ Traffic Monitor是一款用于Windows平台的网速监控悬浮窗软件，可�
 
 - 改动原因与明细：[本 Fork 修改记录](#本-fork-修改记录)
 - 部署包：[`HardwareMonitor-PawnIO/`](./HardwareMonitor-PawnIO)（替换文件 + `deploy.ps1` + 版本校验脚本）
-- 下载：[Releases](https://github.com/anye1998/TrafficMonitor/releases) —— 提供由 GitHub Actions 编译的
-  **标准版（含温度监控）x64 包**，以及仅替换 DLL 的部署包
+- 下载：[Releases](https://github.com/anye1998/TrafficMonitor/releases) —— 提供 GitHub Actions 编译的
+  **标准版**（含内置硬件监控，需管理员）与 **Lite 版**（无内置监控、不弹 UAC，适合只用插件的人）两个 x64 包，
+  以及仅替换 DLL 的部署包
 
 > 本次修改由 **AI 助手（WorkBuddy）** 分析、实现并提交，人工仅负责验证运行结果。本仓库与上游项目无关，相关问题请提到本仓库的 Issues，不要打扰原作者。
 
@@ -153,6 +154,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 |---|---|---|---|
 | 2026-10-25 | `V1.86-pawnio` | 硬件监控驱动从 WinRing0 迁移到 PawnIO，修复被安全软件拦截 + 加固异常处理 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 新增标准版（含硬件监控）编译流水线，解决上游 CI 只编 Lite 版、拿不到带温度的构建产物 | AI 助手（WorkBuddy） |
+| 2026-10-25 | `V1.86-pawnio` | 增加 Lite 版编译任务：无内置硬件监控、清单 `asInvoker`（不弹 UAC），硬件数据交给 `HardwareMonitor` 插件 | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
 
@@ -192,7 +194,7 @@ SHA1: D25340AE8E92A6D29F599FEF426A2BC1B5217299
 | `OpenHardwareMonitorApi/LibreHardwareMonitorLib.xml` | 同步为 0.9.6 的文档。 |
 | `OpenHardwareMonitorApi/OpenHardwareMonitorImp.cpp` | `SetCpuEnable` / `SetGpuEnable` / `SetHddEnable` / `SetMainboardEnable` 与 `MonitorGlobal::UnInit()` 共 5 处增加托管异常捕获。原来这 5 处没有任何保护，内核后端不可用时会抛出托管异常，**直接把主程序带崩**；现在记录到 `error_message` 后降级处理。 |
 | `HardwareMonitor-PawnIO/`（新增） | 可复用的部署包：12 个依赖 DLL + `deploy.ps1`（备份/回滚/版本校验）+ `verify_closure.ps1`（只读元数据校验依赖闭包）+ README。 |
-| `.github/workflows/build-full-pawnio.yml`（新增） | 标准版编译流水线。上游 `main.yml` 只编 `TrafficMonitor_Lite.sln`（不含温度），所以这里单独编 `TrafficMonitor.sln` 的 `Release\|x64`，并在上传产物前做四项校验（无 WinRing0 / PawnIO 存在 / 依赖程序集版本逐位匹配 / exe 导入了 `OpenHardwareMonitorApi.dll`）。 |
+| `.github/workflows/build-full-pawnio.yml`（新增） | 编译流水线，产出两个变体：`build_x64` 编 `TrafficMonitor.sln` 的 `Release\|x64`（标准版），`build_x64_lite` 编 `TrafficMonitor_Lite.sln` 的 `Release (lite)\|x64`（Lite 版）。上传前校验：无 WinRing0 / PawnIO 存在 / 依赖程序集版本逐位匹配 / 标准版必须导入 `OpenHardwareMonitorApi.dll`、Lite 版必须不导入且清单为 `asInvoker`。 |
 
 > **依赖版本的坑（重要）**：`LibreHardwareMonitorLib` 本身没有强名称签名，可以直接替换；但它依赖的
 > `System.*` 是微软签名的程序集，CLR 要求**程序集版本逐位相等**，而 NuGet 包版本 ≠ 程序集版本。
@@ -205,7 +207,19 @@ SHA1: D25340AE8E92A6D29F599FEF426A2BC1B5217299
 
 两种方式，任选其一。
 
-**方式 A：直接用 Release 里编译好的标准版（x64）**
+**方式 A：直接用 Release 里编译好的包（x64）**
+
+Release 里有两个变体，**用哪个取决于你要不要程序自带的硬件监控**：
+
+| | `TrafficMonitor_V1.86-pawnio_x64.zip`<br>（标准版） | `TrafficMonitor_V1.86-pawnio_x64_Lite.zip`<br>（Lite 版） |
+|---|---|---|
+| 内置硬件监控 | **有**（编译了 `OpenHardwareMonitorApi`，直接调 `LibreHardwareMonitorLib`） | **无**（`TrafficMonitor_Lite.sln` 构建，不导入 `OpenHardwareMonitorApi.dll`） |
+| 清单权限 | `requireAdministrator` → **每次启动弹 UAC** | `asInvoker` → **不弹 UAC** |
+| CPU 温度 / 功耗来源 | 程序内置 | 只能靠插件 `plugins\HardwareMonitor.dll` |
+| 适合谁 | 只要一个 exe、不装插件的干净用法 | 已经在用 `HardwareMonitor` 插件看负载/功耗的人（也就是本机现在的配置） |
+
+> 两个包都已经换掉了 WinRing0，`WinRing0` 字符串命中 0、都不再释放 `.sys`。
+> **插件 `HardwareMonitor.dll` 不依赖程序内置监控**，所以 Lite 版照样能看到 CPU 温度、功耗、显卡负载——本机实测就是 Lite 版 + 插件。
 
 1. 装 PawnIO（CPU / 主板温度需要）：
 
@@ -213,10 +227,11 @@ SHA1: D25340AE8E92A6D29F599FEF426A2BC1B5217299
    winget install --id namazso.PawnIO --exact --accept-package-agreements --accept-source-agreements
    ```
 
-2. 从 [Releases](https://github.com/anye1998/TrafficMonitor/releases) 下载
-   `TrafficMonitor_V1.86-pawnio_x64.zip`，解压到一个**新目录**（不要直接覆盖旧安装）。
-3. 需要保留设置/皮肤的话，把旧目录的 `config.ini`、`global_cfg.ini`、`skins\` 拷过来。
-4. 以**管理员身份**运行 `TrafficMonitor.exe`，在显示设置里勾选 CPU 温度等硬件监控项。
+2. 从 [Releases](https://github.com/anye1998/TrafficMonitor/releases) 下载对应 zip，解压到一个**新目录**
+   （不要直接覆盖旧安装）。
+3. 需要保留设置/皮肤的话，把旧目录的 `config.ini`、`global_cfg.ini`、`skins\`、`plugins\` 拷过来。
+4. 运行 `TrafficMonitor.exe`：标准版会弹 UAC（需要管理员权限打开 PawnIO 设备）；
+   Lite 版不弹 UAC。然后在显示设置里勾选 CPU 温度等硬件监控项。
 
 **方式 B：在已安装的 TrafficMonitor 上替换文件**
 
@@ -237,22 +252,27 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\verify_closure
 # 期望最后一行：结论: 闭包完整，无版本冲突。
 ```
 
-本机实测结果：`D:\TrafficMonitor` 下 **0 个 `.sys`**；安全软件不再拦截；CPU 温度正常显示；
-显卡温度、硬盘温度、CPU 占用、网速均正常。
+本机实测结果（Lite 版 + `HardwareMonitor` 插件）：`D:\TrafficMonitor` 下 **0 个 `.sys`**；安全软件不再拦截；
+CPU 温度、功耗、显卡温度/负载、硬盘温度、CPU 占用、网速均正常显示。
 
 ### 6. 已知限制
 
-- **`TrafficMonitor_V1.86-pawnio_x64.zip` 由 GitHub Actions 编译**，不是本地构建：工作流
+- **Release 里两个 zip 都由 GitHub Actions 编译**，不是本地构建：工作流
   `Build (full, PawnIO)` 使用 `windows-2022` + VS2022（v143）+ MFC + C++/CLI + .NET Framework 4.7.2 目标包。
-  本地实施环境没有 MSVC，无法复现该构建；如需自己编，用 VS2022 打开 `TrafficMonitor.sln`（`Release|x64`）。
+  本地实施环境没有 MSVC，无法复现该构建；如需自己编，用 VS2022 打开 `TrafficMonitor.sln`（`Release|x64`，标准版）
+  或 `TrafficMonitor_Lite.sln`（`Release (lite)|x64`，Lite 版）。
 - 该 exe 依赖 **VC++ 2015-2022 运行库**（`mfc140u.dll` / `MSVCP140.dll` / `VCRUNTIME140.dll`），
   缺失会提示「找不到 MSVC*.dll」。
 - 未安装 PawnIO 时**不会崩溃、不会被拦截**，只是 CPU / 主板温度读不到。
-- 打开 PawnIO 设备需要管理员权限，因此标准版仍需以管理员身份运行（与原来一致）。
+- 打开 PawnIO 设备需要管理员权限：**标准版**清单为 `requireAdministrator`，启动时自己申请提权；
+  **Lite 版**清单为 `asInvoker`，以普通权限运行时拿不到依赖 MSR 的温度数据（功耗/占用这类不需要 MSR 的仍可读）。
 - **只提供 x64**：`LibreHardwareMonitorLib.dll` 用的是 NuGet 包的 `win-x64` 版本。
   32 位构建需改用 `runtimes/win-x86/lib/net472` 下的同名文件，并相应调整工作流。
 
 ### 7. 回滚
+
+回滚只对**方式 B**（在已安装目录上替换 DLL）有效，因为它需要恢复被覆盖的旧文件；
+用方式 A 换整个包的话，直接把旧目录换回去即可（旧目录建议先备份）。
 
 删除 `HardwareMonitor-PawnIO` 新增的 12 个 DLL，并从备份恢复旧的 `LibreHardwareMonitorLib.dll`：
 
