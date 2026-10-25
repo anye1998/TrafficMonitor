@@ -11,6 +11,25 @@
 
 TrafficMonitor is a network monitoring software with floating window feature for Windows. It displays the current internet speed and CPU and RAM usage. There are also other capabilities like an embedded display in the taksbar, changeable display skins, and historical traffic statistics. 
 
+---
+
+**This is a personal fork of [zhongyang219/TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) with AI-assisted local changes.**
+
+It fixes the hardware-monitoring driver being blocked by security software: the bundled `LibreHardwareMonitorLib.dll`
+embedded **WinRing0 1.2.0.5** (CVE-2020-14979), which Microsoft lists as a vulnerable driver. It has been replaced
+with LibreHardwareMonitor 0.9.6 using the **PawnIO** backend, and the managed-exception handling around the
+driver backend has been hardened.
+
+- Change log (Chinese): [本 Fork 修改记录](./README.md#本-fork-修改记录)
+- Deployment payload: [`HardwareMonitor-PawnIO/`](./HardwareMonitor-PawnIO)
+- Downloads: [Releases](https://github.com/anye1998/TrafficMonitor/releases)
+
+> These changes were analysed, implemented and committed by an **AI assistant (WorkBuddy)**; the human maintainer
+> only verified the runtime behaviour. This fork is unrelated to the upstream project — please use this fork's
+> Issues instead of bothering the original author.
+
+---
+
 # Related Links
 
 Please [click here](https://github.com/zhongyang219/TrafficMonitor/releases/latest) to download the latest version of TrafficMonitor. 

@@ -11,6 +11,20 @@
 
 Traffic Monitor是一款用于Windows平台的网速监控悬浮窗软件，可以显示当前网速、CPU及内存利用率，支持嵌入到任务栏显示，支持更换皮肤、历史流量统计等功能。
 
+---
+
+**本仓库是 [zhongyang219/TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) 的个人 Fork，包含 AI 辅助的本地修改。**
+
+修复了「硬件监控驱动被安全软件拦截」的问题：`LibreHardwareMonitorLib.dll` 内嵌的 **WinRing0 1.2.0.5**（漏洞 CVE-2020-14979）已被微软列入易受攻击驱动名单，安全软件会在程序启动时拦截它释放出来的 `TrafficMonitor.sys`。现已替换为使用 **PawnIO** 后端的 LibreHardwareMonitor 0.9.6，并加固了后端不可用时的异常处理。
+
+- 改动原因与明细：[本 Fork 修改记录](#本-fork-修改记录)
+- 部署包：[`HardwareMonitor-PawnIO/`](./HardwareMonitor-PawnIO)（替换文件 + `deploy.ps1` + 版本校验脚本）
+- 下载：[Releases](https://github.com/anye1998/TrafficMonitor/releases)
+
+> 本次修改由 **AI 助手（WorkBuddy）** 分析、实现并提交，人工仅负责验证运行结果。本仓库与上游项目无关，相关问题请提到本仓库的 Issues，不要打扰原作者。
+
+---
+
 # 相关链接：
 
 请[点击此处](https://github.com/zhongyang219/TrafficMonitor/releases/latest)下载TrafficMonitor的最新版本。
@@ -131,6 +145,104 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 需要注意的是，温度监控功能默认是关闭的，如果你要使用TrafficMonitor的温度监控功能，请到[“选项设置”-“常规设置”-“硬件监控”](https://github.com/zhongyang219/TrafficMonitor/wiki/选项设置#硬件监控)中开启。
 
 **注意：硬件监控功能（包括温度监控和显卡使用率监控）可能存在一些问题，它可能会占用更多的CPU和内存。据部分用户反馈，开启温度功能后会导致程序崩溃和系统死机等问题，请在知晓以上风险后再决定开启硬件监控功能。否则，请不要使用硬件监控功能。**
+
+# 本 Fork 修改记录
+
+| 日期 | 版本标记 | 修改内容 | 实施方 |
+|---|---|---|---|
+| 2026-10-25 | `V1.86-pawnio` | 硬件监控驱动从 WinRing0 迁移到 PawnIO，修复被安全软件拦截 + 加固异常处理 | AI 助手（WorkBuddy） |
+
+## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
+
+**性质**：本 Fork 的本地修改，**由 AI 助手（WorkBuddy）完成分析与实现**，未提交到上游项目。
+
+### 1. 问题
+
+安全软件（微软 Defender / 火绒 / 360 等）拦截由本程序释放的内核驱动：
+
+```
+驱动文件路径：D:\TrafficMonitor\TrafficMonitor.sys
+SHA1: D25340AE8E92A6D29F599FEF426A2BC1B5217299
+操作结果：已阻止
+释放进程ID：9224
+释放进程：D:\TrafficMonitor\TrafficMonitor.exe
+```
+
+表现为：开启「CPU 温度 / 主板温度」后安全软件报警，或插件初始化失败、温度全部显示 `--`。
+
+### 2. 根因
+
+- 该 `.sys` **不在本仓库源码里**。它是旧版 `LibreHardwareMonitorLib.dll` 内嵌的 `WinRing0x64.gz`
+  在 `Computer.Open()` 时解压释放到程序目录，文件名取 `<进程名>.sys`，因此显示为 `TrafficMonitor.exe` 释放了 `TrafficMonitor.sys`。
+  解出该资源的 SHA1 与安全软件日志**逐字节一致**，版本为 **WinRing0 1.2.0.5**（设备 `\Device\WinRing0_1_2_0`）。
+- 该驱动存在公开漏洞 **CVE-2020-14979**（CVSS 7.8）：设备对象对任意本地用户开放 IOCTL，
+  可读写 MSR、I/O 端口、PCI 配置空间、映射物理内存 → 低权限进程可提权到 SYSTEM。
+  微软 Defender 的检测名为 `VulnerableDriver:WinNT/Winring0`。
+- 驱动是**预编译二进制**，本仓库没有它的源码；即便自行硬化也没有 EV 签名，Windows 不会加载。
+  **所以改本项目的 C++ 代码无法修掉这个漏洞，只能换成不含该驱动的后端。**
+  （把驱动加入安全软件白名单等于主动保留提权漏洞，不可取。）
+
+### 3. 改动
+
+| 文件 | 改动 |
+|---|---|
+| `OpenHardwareMonitorApi/LibreHardwareMonitorLib.dll` | 替换为 LibreHardwareMonitor **0.9.6**（`runtimes/win-x64/lib/net472`）。上游已彻底移除 WinRing0，改用 **PawnIO**（签名驱动、兼容 HVCI / 内存完整性）。二进制内 `WinRing0` 字符串命中 **0**，`PawnIO` 命中 4。 |
+| `OpenHardwareMonitorApi/LibreHardwareMonitorLib.xml` | 同步为 0.9.6 的文档。 |
+| `OpenHardwareMonitorApi/OpenHardwareMonitorImp.cpp` | `SetCpuEnable` / `SetGpuEnable` / `SetHddEnable` / `SetMainboardEnable` 与 `MonitorGlobal::UnInit()` 共 5 处增加托管异常捕获。原来这 5 处没有任何保护，内核后端不可用时会抛出托管异常，**直接把主程序带崩**；现在记录到 `error_message` 后降级处理。 |
+| `HardwareMonitor-PawnIO/`（新增） | 可复用的部署包：12 个依赖 DLL + `deploy.ps1`（备份/回滚/版本校验）+ `verify_closure.ps1`（只读元数据校验依赖闭包）+ README。 |
+
+> **依赖版本的坑（重要）**：`LibreHardwareMonitorLib` 本身没有强名称签名，可以直接替换；但它依赖的
+> `System.*` 是微软签名的程序集，CLR 要求**程序集版本逐位相等**，而 NuGet 包版本 ≠ 程序集版本。
+> 例如 LHM 需要的 `System.Runtime.CompilerServices.Unsafe 6.0.3.0` 对应的是包 **6.1.2**（不是 6.0.0），
+> `System.Buffers 4.0.5.0` 对应包 **4.6.1**，`System.Numerics.Vectors 4.1.6.0` 对应包 **4.6.1**。
+> 用常见版本会连环报 `0x80131040`（找到的程序集清单定义与程序集引用不匹配）。完整对照表见
+> [`HardwareMonitor-PawnIO/README.md`](./HardwareMonitor-PawnIO/README.md)。
+
+### 4. 使用（在已安装的 TrafficMonitor 上替换）
+
+1. 安装 PawnIO（CPU / 主板温度需要）：
+
+   ```powershell
+   winget install --id namazso.PawnIO --exact --accept-package-agreements --accept-source-agreements
+   ```
+
+2. 从托盘图标右键**退出** TrafficMonitor（DLL 被占用时无法覆盖）。
+3. 以管理员身份运行部署脚本：
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Target "D:\TrafficMonitor"
+   ```
+
+4. 以管理员身份启动 TrafficMonitor，确认 CPU 温度有读数、程序目录**不再出现 `.sys` 文件**。
+
+### 5. 验证
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\verify_closure.ps1 -Dir "D:\TrafficMonitor"
+# 期望最后一行：结论: 闭包完整，无版本冲突。
+```
+
+本机实测结果：`D:\TrafficMonitor` 下 **0 个 `.sys`**；安全软件不再拦截；CPU 温度正常显示；
+显卡温度、硬盘温度、CPU 占用、网速均正常。
+
+### 6. 已知限制
+
+- **本 Fork 不提供编译好的 `TrafficMonitor.exe`**（实施环境没有 MSVC / VS，无法编译 C++ 工程）。
+  Release 提供的是**部署包**，用于在官方已发布的版本上替换 DLL；如需重新编译 exe，
+  用 VS2022 打开 `TrafficMonitor.sln` 并勾选 MFC、C++/CLI、.NET Framework 4.7.2 开发工具。
+- 未安装 PawnIO 时**不会崩溃、不会被拦截**，只是 CPU / 主板温度读不到。
+- 打开 PawnIO 设备需要管理员权限，因此标准版仍需以管理员身份运行（与原来一致）。
+- 32 位版本需改用 NuGet 包中 `runtimes/win-x86/lib/net472` 下的 `LibreHardwareMonitorLib.dll`。
+
+### 7. 回滚
+
+删除 `HardwareMonitor-PawnIO` 新增的 12 个 DLL，并从备份恢复旧的 `LibreHardwareMonitorLib.dll`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Target "D:\TrafficMonitor" -Rollback
+```
+
+注意回滚等于恢复被拦截的 WinRing0，安全软件会重新报警。
 
 # 更新日志
 
