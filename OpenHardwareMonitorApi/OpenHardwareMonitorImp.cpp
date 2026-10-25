@@ -108,22 +108,69 @@ namespace OpenHardwareMonitorApi
 
     void COpenHardwareMonitor::SetCpuEnable(bool enable)
     {
-        MonitorGlobal::Instance()->computer->IsCpuEnabled = enable;
+        //启用CPU监控需要LibreHardwareMonitor通过内核后端（过去的WinRing0、现在的PawnIO）读取MSR，
+        //后端不可用时（未安装PawnIO、被安全软件拦截等）这里会抛出托管异常，必须捕获，否则会直接把主程序带崩
+        try
+        {
+            MonitorGlobal::Instance()->computer->IsCpuEnabled = enable;
+        }
+        catch (System::Exception^ e)
+        {
+            error_message = ClrStringToStdWstring(e->Message);
+        }
+        catch (...)
+        {
+            error_message = L"Failed to enable CPU hardware monitoring.";
+        }
     }
 
     void COpenHardwareMonitor::SetGpuEnable(bool enable)
     {
-        MonitorGlobal::Instance()->computer->IsGpuEnabled = enable;
+        try
+        {
+            MonitorGlobal::Instance()->computer->IsGpuEnabled = enable;
+        }
+        catch (System::Exception^ e)
+        {
+            error_message = ClrStringToStdWstring(e->Message);
+        }
+        catch (...)
+        {
+            error_message = L"Failed to enable GPU hardware monitoring.";
+        }
     }
 
     void COpenHardwareMonitor::SetHddEnable(bool enable)
     {
-        MonitorGlobal::Instance()->computer->IsStorageEnabled = enable;
+        try
+        {
+            MonitorGlobal::Instance()->computer->IsStorageEnabled = enable;
+        }
+        catch (System::Exception^ e)
+        {
+            error_message = ClrStringToStdWstring(e->Message);
+        }
+        catch (...)
+        {
+            error_message = L"Failed to enable storage hardware monitoring.";
+        }
     }
 
     void COpenHardwareMonitor::SetMainboardEnable(bool enable)
     {
-        MonitorGlobal::Instance()->computer->IsMotherboardEnabled = enable;
+        //和CPU监控一样，主板监控同样依赖内核后端读取Super I/O
+        try
+        {
+            MonitorGlobal::Instance()->computer->IsMotherboardEnabled = enable;
+        }
+        catch (System::Exception^ e)
+        {
+            error_message = ClrStringToStdWstring(e->Message);
+        }
+        catch (...)
+        {
+            error_message = L"Failed to enable mainboard hardware monitoring.";
+        }
     }
 
     bool COpenHardwareMonitor::GetCPUFreq(IHardware^ hardware, float& freq) {
@@ -419,7 +466,17 @@ namespace OpenHardwareMonitorApi
 
     void MonitorGlobal::UnInit()
     {
-        computer->Close();
+        //程序退出时如果驱动已经不在，Close()同样可能抛异常，这里吞掉，避免退出时崩溃
+        try
+        {
+            computer->Close();
+        }
+        catch (System::Exception^)
+        {
+        }
+        catch (...)
+        {
+        }
     }
 
 }
