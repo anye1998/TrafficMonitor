@@ -1,7 +1,10 @@
-name: Build (full, PawnIO)
+name: Build (full + lite, PawnIO)
 
-# 标准版 = 含温度监控/硬件监控（TrafficMonitor.sln 的 Release 配置）。
-# 上游 main.yml 只编 TrafficMonitor_Lite.sln（不含温度），所以这里单独编标准版。
+# 产出两个变体：
+#   build_x64      标准版：编 TrafficMonitor.sln，含内置硬件监控（清单 requireAdministrator）
+#   build_x64_lite Lite 版：编 TrafficMonitor_Lite.sln，无内置硬件监控（清单 asInvoker，不弹 UAC），
+#                           硬件数据由 HardwareMonitor 插件提供，因此同样补齐 LibreHardwareMonitor 依赖
+# 上游 main.yml 只编 Lite，所以标准版必须单独编。
 on:
   workflow_dispatch:
   push:
@@ -128,4 +131,72 @@ jobs:
         with:
           name: TrafficMonitor_x64_full_pawnio
           path: Bin/x64/Release/**
+          if-no-files-found: error
+
+  # Lite 版：不含内置硬件监控（清单 asInvoker，启动不弹 UAC）。
+  # 适合只用 HardwareMonitor 插件看负载/功耗这类指标的用户 —— 插件不依赖内置监控。
+  build_x64_lite:
+    runs-on: windows-2022
+    name: Release x64 Lite (plugin only)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Ensure MFC
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $needMfc = -not (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATLMFC -property installationPath)
+          Write-Host "need MFC: $needMfc"
+          if ($needMfc) {
+            $installPath = & $vswhere -latest -products * -property installationPath
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            $vsArgs = @('modify', '--installPath', "`"$installPath`"", '--quiet', '--norestart', '--nocache',
+                        '--add', 'Microsoft.VisualStudio.Component.VC.ATLMFC')
+            $p = Start-Process -FilePath $installer -ArgumentList $vsArgs -Wait -NoNewWindow -PassThru
+            Write-Host "vs_installer exit code: $($p.ExitCode)"
+          }
+
+      - name: Build Lite configuration (Release (lite) x64)
+        run: msbuild TrafficMonitor_Lite.sln -m -p:configuration="Release (lite)" -p:platform=x64 -p:platformToolset=v143 -verbosity:minimal
+
+      - name: Assemble output (exe + hardware-monitor plugin dependencies)
+        shell: pwsh
+        run: |
+          $out = "Bin/x64/Release (lite)"
+          if (-not (Test-Path "$out/TrafficMonitor.exe")) { throw "TrafficMonitor.exe not produced at $out" }
+          # Lite 版自身不含硬件监控，但插件 HardwareMonitor.dll 需要这套 LibreHardwareMonitor 依赖
+          Copy-Item "HardwareMonitor-PawnIO/files/*.dll" $out -Force
+          Get-ChildItem $out -File | Sort-Object Name | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+
+      - name: Sanity checks (lite)
+        shell: pwsh
+        run: |
+          $err = 0
+          $out = "Bin/x64/Release (lite)"
+          $exe = "$out/TrafficMonitor.exe"
+          $exeText = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($exe))
+
+          # 1) 必须是 Lite：不引用 OpenHardwareMonitorApi，清单为 asInvoker（不弹 UAC）
+          if ($exeText.Contains('OpenHardwareMonitorApi')) { Write-Host "FAIL: exe references OpenHardwareMonitorApi (not lite)"; $err++ }
+          else { Write-Host "OK: no OpenHardwareMonitorApi reference (lite)" }
+          if ($exeText.Contains('asInvoker')) { Write-Host "OK: manifest asInvoker (no UAC prompt)" }
+          else { Write-Host "FAIL: asInvoker not found in manifest"; $err++ }
+          if ($exeText.Contains('requireAdministrator')) { Write-Host "FAIL: manifest requires administrator"; $err++ }
+
+          # 2) 插件依赖的库不能带 WinRing0
+          $dllText = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes("$out/LibreHardwareMonitorLib.dll"))
+          if ($dllText.Contains('WinRing0')) { Write-Host "FAIL: WinRing0 reference found"; $err++ } else { Write-Host "OK: no WinRing0 reference" }
+          if ($dllText.Contains('PawnIO')) { Write-Host "OK: PawnIO backend present" } else { Write-Host "FAIL: PawnIO not found"; $err++ }
+
+          if ($err -ne 0) { throw "$err sanity check(s) failed" }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrafficMonitor_x64_lite_pawnio
+          path: Bin/x64/Release (lite)/**
           if-no-files-found: error
