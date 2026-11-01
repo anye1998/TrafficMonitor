@@ -21,10 +21,12 @@ with LibreHardwareMonitor 0.9.6 using the **PawnIO** backend, and the managed-ex
 driver backend has been hardened.
 
 - Change log (Chinese): [本 Fork 修改记录](./README.md#本-fork-修改记录)
+- New in this fork: a **Restart** item in the right-click menu (between *Help* and *Exit*) that restarts the program
+  in one click — handy when iterating on plugins
 - Deployment payload: [`HardwareMonitor-PawnIO/`](./HardwareMonitor-PawnIO)
 - Downloads: [Releases](https://github.com/anye1998/TrafficMonitor/releases)
-  - `TrafficMonitor_V1.86-pawnio_x64.zip` — full build, hardware monitoring built in, manifest `requireAdministrator`
-  - `TrafficMonitor_V1.86-pawnio_x64_Lite.zip` — lite build, no built-in hardware monitoring, manifest `asInvoker`
+  - `TrafficMonitor_V1.86-pawnio-r2_x64.zip` — full build, hardware monitoring built in, manifest `requireAdministrator`
+  - `TrafficMonitor_V1.86-pawnio-r2_x64_Lite.zip` — lite build, no built-in hardware monitoring, manifest `asInvoker`
     (no UAC prompt); hardware data comes from the `plugins\HardwareMonitor.dll` plugin
 
 Both builds are produced by GitHub Actions and no longer contain WinRing0 (zero `WinRing0` string hits, no `.sys`

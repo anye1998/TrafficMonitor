@@ -18,6 +18,7 @@ Traffic Monitor是一款用于Windows平台的网速监控悬浮窗软件，可�
 修复了「硬件监控驱动被安全软件拦截」的问题：`LibreHardwareMonitorLib.dll` 内嵌的 **WinRing0 1.2.0.5**（漏洞 CVE-2020-14979）已被微软列入易受攻击驱动名单，安全软件会在程序启动时拦截它释放出来的 `TrafficMonitor.sys`。现已替换为使用 **PawnIO** 后端的 LibreHardwareMonitor 0.9.6，并加固了后端不可用时的异常处理。
 
 - 改动原因与明细：[本 Fork 修改记录](#本-fork-修改记录)
+- 新增功能：右键菜单在“帮助”与“退出”之间多了**重启**，一键重启程序，方便调试插件（[详见](#2026-11-01--右键菜单新增重启)）
 - 部署包：[`HardwareMonitor-PawnIO/`](./HardwareMonitor-PawnIO)（替换文件 + `deploy.ps1` + 版本校验脚本）
 - 下载：[Releases](https://github.com/anye1998/TrafficMonitor/releases) —— 提供 GitHub Actions 编译的
   **标准版**（含内置硬件监控，需管理员）与 **Lite 版**（无内置监控、不弹 UAC，适合只用插件的人）两个 x64 包，
@@ -155,6 +156,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 | 2026-10-25 | `V1.86-pawnio` | 硬件监控驱动从 WinRing0 迁移到 PawnIO，修复被安全软件拦截 + 加固异常处理 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 新增标准版（含硬件监控）编译流水线，解决上游 CI 只编 Lite 版、拿不到带温度的构建产物 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 增加 Lite 版编译任务：无内置硬件监控、清单 `asInvoker`（不弹 UAC），硬件数据交给 `HardwareMonitor` 插件 | AI 助手（WorkBuddy） |
+| 2026-11-01 | `V1.86-pawnio-r2` | 右键菜单在“帮助”与“退出”之间新增“重启”，一键重启程序，方便调试插件（含配套新图标与 18 种语言文本） | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
 
@@ -211,7 +213,7 @@ SHA1: D25340AE8E92A6D29F599FEF426A2BC1B5217299
 
 Release 里有两个变体，**用哪个取决于你要不要程序自带的硬件监控**：
 
-| | `TrafficMonitor_V1.86-pawnio_x64.zip`<br>（标准版） | `TrafficMonitor_V1.86-pawnio_x64_Lite.zip`<br>（Lite 版） |
+| | `TrafficMonitor_V1.86-pawnio-r2_x64.zip`<br>（标准版） | `TrafficMonitor_V1.86-pawnio-r2_x64_Lite.zip`<br>（Lite 版） |
 |---|---|---|
 | 内置硬件监控 | **有**（编译了 `OpenHardwareMonitorApi`，直接调 `LibreHardwareMonitorLib`） | **无**（`TrafficMonitor_Lite.sln` 构建，不导入 `OpenHardwareMonitorApi.dll`） |
 | 清单权限 | `requireAdministrator` → **每次启动弹 UAC** | `asInvoker` → **不弹 UAC** |
@@ -220,6 +222,9 @@ Release 里有两个变体，**用哪个取决于你要不要程序自带的硬�
 
 > 两个包都已经换掉了 WinRing0，`WinRing0` 字符串命中 0、都不再释放 `.sys`。
 > **插件 `HardwareMonitor.dll` 不依赖程序内置监控**，所以 Lite 版照样能看到 CPU 温度、功耗、显卡负载——本机实测就是 Lite 版 + 插件。
+>
+> 文件名中的版本标记对应 Release：`V1.86-pawnio-r2` 为当前版本（含“重启”菜单项）；
+> 更早的 `V1.86-pawnio` 内容相同，只是没有“重启”。
 
 1. 装 PawnIO（CPU / 主板温度需要）：
 
@@ -281,6 +286,65 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 ```
 
 注意回滚等于恢复被拦截的 WinRing0，安全软件会重新报警。
+
+## 2026-11-01 · 右键菜单新增“重启”
+
+**性质**：本 Fork 的本地功能增强，**由 AI 助手（WorkBuddy）完成实现**，未提交到上游项目。
+
+### 1. 需求
+
+调试插件时，每次替换插件 DLL 都得走一遍：托盘图标右键 → 退出 → 回到程序目录双击 `TrafficMonitor.exe`；
+标准版每次启动还要再确认一次 UAC。改动本身只有一行代码，重启流程却要三四步，很耽误时间。
+
+### 2. 效果
+
+- **位置**：主窗口（悬浮窗 / 托盘图标）和任务栏窗口的右键菜单，都在“帮助”子菜单下方、“退出”上方多了**重启**一项。
+- **图标**：新画的 ↻ 线描图标，与原菜单图标同一套风格——同样的 `rgb(110,110,110)` 线条颜色、约 2.5px 笔画、
+  纯描边无填充，并按 `16/20/24/28/32` 五种尺寸分别渲染，保证菜单里的小图标同样清晰。
+- **行为**：点一下即可完成“保存设置 → 卸载插件 → 移除通知区图标 → 进程退出 → 自动重新启动”，
+  等同于手动退出再打开，但只需一次点击。
+- **多语言**：中文“重启(&R)”、英文 `&Restart`，其余 16 个语言文件同步补了对应译文。
+
+### 3. 实现要点
+
+| 文件 | 改动 |
+|---|---|
+| `TrafficMonitor/TrafficMonitor.rc` | 菜单 `IDR_MENU1`（主窗口）与 `IDR_TASK_BAR_MENU`（任务栏窗口）在 `TXT_HELP_MENU` 与 `TXT_EXIT` 之间插入 `MENUITEM "TXT_RESTART", ID_RESTART`；新增 `IDI_RESTART ICON "res\menu_icon\restart.ico"` |
+| `TrafficMonitor/resource.h` | 新增 `IDI_RESTART`(349)、`ID_RESTART`(33666)，并同步 `_APS_NEXT_*` |
+| `TrafficMonitor/TrafficMonitor.cpp` | 消息映射新增 `ON_COMMAND(ID_RESTART, &CTrafficMonitorApp::OnRestart)`；`InitMenuResourse()` 里给两个右键菜单注册 `IDI_RESTART` 图标；新增 `OnRestart()`、`RestartApplication()`；`ExitInstance()` 中按标记启动新实例 |
+| `TrafficMonitor/TrafficMonitor.h` | 声明 `OnRestart()`、`RestartApplication()`，新增成员 `m_restart_after_exit`、`m_instance_mutex` |
+| `TrafficMonitor/res/menu_icon/restart.ico`（新增） | 与现有菜单图标同规格的 5 个尺寸、32bpp 带 alpha |
+| `TrafficMonitor/language/*.ini`（18 个） | `[menu]` 段新增 `TXT_RESTART`，菜单文本仍由原有的 `TranslateMenuItems()` 在运行时替换 |
+| `TrafficMonitor/TrafficMonitor.vcxproj(.filters)` | 把新图标加入工程，便于在 VS 里看到 |
+
+**为什么不是“`CreateProcess` 之后直接 `ExitProcess`”**，这里踩了三个坑，逐个说明：
+
+1. **配置必须先落盘**：设置是在 `CTrafficMonitorDlg::OnClose()` 里保存的（`SaveConfig()` / `SaveGlobalConfig()` /
+   历史流量完整写入）。如果提前启动新实例，新进程读到的还是旧配置。因此重启被拆成“先走完退出的关闭流程，
+   再在 `ExitInstance()` 里拉起新进程”。
+2. **单实例互斥体必须先释放**：程序用命名互斥体 `TrafficMonitor-1419J3XLKL1w8OZc` 保证单实例，
+   句柄在 `InitInstance()` 里创建后一直存活到进程结束。若直接启动新实例，它会命中 `ERROR_ALREADY_EXISTS`，
+   弹出“TrafficMonitor 已在运行”。因此在 `RestartApplication()` 里先 `CloseHandle(m_instance_mutex)` 再启动。
+3. **复用退出流程而不是自己写清理**：`OnRestart()` 只是置标记 + `PostMessage(WM_CLOSE)`，
+   这样插件反初始化、通知区图标移除、窗口销毁等逻辑与点“退出”完全一致，不会漏掉。
+
+> 提权：标准版清单是 `requireAdministrator`，由它 `ShellExecute` 出来的新进程会继承同样的权限，
+> 所以重启不会重复弹 UAC；Lite 版本来就是 `asInvoker`，同样沿用当前权限。
+
+### 4. 使用
+
+可直接用 Release 里编好的包：`TrafficMonitor_V1.86-pawnio-r2_x64.zip`（标准版）或
+`TrafficMonitor_V1.86-pawnio-r2_x64_Lite.zip`（Lite 版），两者都已包含本功能。
+
+1. 右键托盘图标（或任务栏窗口）→ **帮助 → 重启**（快捷键 `R`）。
+2. 程序自动退出并重新启动，插件随之重新加载——改完插件 DLL 直接点它即可，不必手动退出。
+3. 若插件目录里的 DLL 正在被占用（例如自己另开了调试器），重启后插件加载失败，`error.log` 里会有记录。
+
+### 5. 已知限制
+
+- 重启是**整个程序重启**，不是只重载插件，未写到磁盘的插件内部状态会丢失（这一点和手动退出再打开完全相同）。
+- 重启不会带上启动参数（例如更新器传入的参数），会以最普通的方式重新启动。
+- 若 `TrafficMonitor.exe` 在重启瞬间被改名/删除，新实例启动失败，只会在 `error.log` 里留一条记录，程序不会再自己回来。
 
 # 更新日志
 
