@@ -172,10 +172,14 @@ public:
     virtual unsigned int GetThemeColor() const override;
     void SetThemeColor(COLORREF color);
 
+    void RestartApplication();      //程序退出前启动一个新的实例，实现“重启”功能
+
 private:
     //int m_no_multistart_warning_time{};       //用于设置在开机后多长时间内不弹出“已经有一个程序正在运行”的警告提示
     bool m_no_multistart_warning{};         //如果为false，则永远都不会弹出“已经有一个程序正在运行”的警告提示
     bool m_exit_when_start_by_restart_manager{ true };      //如果程序被Windows重启管理器重新启动，则退出程序
+    bool m_restart_after_exit{};            //如果为true，则在程序退出前重新启动一个新的实例
+    HANDLE m_instance_mutex{};              //用于实现单实例运行的互斥体的句柄
     int m_dpi{ 96 };
 
     bool m_checking_update{ false };        //是否正在检查更新
@@ -197,6 +201,7 @@ public:
     afx_msg void OnHelp();
     afx_msg void OnFrequentyAskedQuestions();
     afx_msg void OnUpdateLog();
+    afx_msg void OnRestart();       //重启程序
     virtual int ExitInstance();
 
     // 通过 ITrafficMonitor 继承

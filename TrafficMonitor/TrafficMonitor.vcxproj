@@ -1024,6 +1024,7 @@
     <Image Include="res\menu_icon\pin.ico" />
     <Image Include="res\menu_icon\plugins.ico" />
     <Image Include="res\menu_icon\plugin_disabled.ico" />
+    <Image Include="res\menu_icon\restart.ico" />
     <Image Include="res\menu_icon\setting.ico" />
     <Image Include="res\menu_icon\skn.ico" />
     <Image Include="res\menu_icon\statistics.ico" />

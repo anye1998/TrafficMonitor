@@ -932,6 +932,9 @@
     <Image Include="res\menu_icon\plugins.ico">
       <Filter>资源文件\icons</Filter>
     </Image>
+    <Image Include="res\menu_icon\restart.ico">
+      <Filter>资源文件\icons</Filter>
+    </Image>
     <Image Include="res\menu_icon\setting.ico">
       <Filter>资源文件\icons</Filter>
     </Image>

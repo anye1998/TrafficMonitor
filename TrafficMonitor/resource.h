@@ -45,6 +45,7 @@
 #define IDR_LICENSE                     310
 #define IDI_EXIT                        311
 #define IDI_HELP                        312
+#define IDI_RESTART                     349
 #define IDI_INFO                        313
 #define IDI_LOCK                        314
 #define IDI_SETTINGS                    315
@@ -463,13 +464,14 @@
 #define ID_PLUGIN_COMMAND_START         33408
 #define ID_PLUGIN_COMMAND_MAX           33664
 #define ID_RESTORE_DEFAULT              33665
+#define ID_RESTART                      33666
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        349
-#define _APS_NEXT_COMMAND_VALUE         33666
+#define _APS_NEXT_RESOURCE_VALUE        350
+#define _APS_NEXT_COMMAND_VALUE         33667
 #define _APS_NEXT_CONTROL_VALUE         1221
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

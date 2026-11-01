@@ -31,6 +31,7 @@ BEGIN_MESSAGE_MAP(CTrafficMonitorApp, CWinApp)
     ON_COMMAND(ID_HELP, &CTrafficMonitorApp::OnHelp)
     ON_COMMAND(ID_FREQUENTY_ASKED_QUESTIONS, &CTrafficMonitorApp::OnFrequentyAskedQuestions)
     ON_COMMAND(ID_UPDATE_LOG, &CTrafficMonitorApp::OnUpdateLog)
+    ON_COMMAND(ID_RESTART, &CTrafficMonitorApp::OnRestart)
 END_MESSAGE_MAP()
 
 
@@ -836,6 +837,7 @@ void CTrafficMonitorApp::InitMenuResourse()
         CMenuIcon::AddIconToMenuItem(menu.GetSubMenu(0)->GetSafeHmenu(), 14, TRUE, GetMenuIcon(IDI_HELP));
         CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_HELP, FALSE, GetMenuIcon(IDI_HELP));
         CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_APP_ABOUT, FALSE, GetMenuIcon(IDR_MAINFRAME));
+        CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_RESTART, FALSE, GetMenuIcon(IDI_RESTART));
         CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_APP_EXIT, FALSE, GetMenuIcon(IDI_EXIT));
     };
     //主窗口右键菜单
@@ -860,6 +862,7 @@ void CTrafficMonitorApp::InitMenuResourse()
         CMenuIcon::AddIconToMenuItem(menu.GetSubMenu(0)->GetSafeHmenu(), 13, TRUE, GetMenuIcon(IDI_HELP));
         CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_HELP, FALSE, GetMenuIcon(IDI_HELP));
         CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_APP_ABOUT, FALSE, GetMenuIcon(IDR_MAINFRAME));
+        CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_RESTART, FALSE, GetMenuIcon(IDI_RESTART));
         CMenuIcon::AddIconToMenuItem(menu.GetSafeHmenu(), ID_APP_EXIT, FALSE, GetMenuIcon(IDI_EXIT));
     };
     addIconsForTaksbarWindowMenu(m_taskbar_menu);
@@ -987,6 +990,7 @@ BOOL CTrafficMonitorApp::InitInstance()
     mutex_name = _T("TrafficMonitor-1419J3XLKL1w8OZc");
 #endif
     HANDLE hMutex = ::CreateMutex(NULL, TRUE, mutex_name);
+    m_instance_mutex = hMutex;      //保存互斥体的句柄，“重启”时需要在退出前关闭它以释放单实例限制
     if (hMutex != NULL)
     {
         if (GetLastError() == ERROR_ALREADY_EXISTS)
@@ -1384,8 +1388,51 @@ void CTrafficMonitorApp::OnUpdateLog()
 }
 
 
+// “重启”菜单项的处理。
+// 这里不直接退出进程，而是走和“退出”菜单项完全一样的关闭流程（保存设置、卸载插件、
+// 移除通知区图标等），并设置 m_restart_after_exit 标记，由 ExitInstance 负责启动新的实例。
+// 这样调试插件时只需要点一次菜单，不必手动退出再双击程序。
+void CTrafficMonitorApp::OnRestart()
+{
+    m_restart_after_exit = true;
+    if (m_pMainWnd != nullptr)
+        m_pMainWnd->PostMessage(WM_CLOSE);      //和“退出”一样通过关闭主窗口来结束程序
+}
+
+// 启动一个新的程序实例，让“重启”功能真正完成重启。
+// 必须在旧的实例即将结束时调用：此时配置已经保存完毕，且互斥体句柄会被关闭，
+// 新实例才不会因为“已经有一个程序正在运行”而退出。
+void CTrafficMonitorApp::RestartApplication()
+{
+    //关闭单实例互斥体的句柄，释放“已有实例正在运行”的标记
+    if (m_instance_mutex != nullptr)
+    {
+        ::CloseHandle(m_instance_mutex);
+        m_instance_mutex = nullptr;
+    }
+
+    if (m_module_path.empty())
+        return;
+
+    //以程序所在目录为工作目录启动新的实例。
+    //如果当前进程是提权运行的（标准版），新进程会继承同样的权限，不会再次弹出UAC提示。
+    HINSTANCE hInstance = ::ShellExecute(nullptr, _T("open"), m_module_path.c_str(), nullptr, m_module_dir.c_str(), SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(hInstance) <= 32)     //ShellExecute的返回值小于等于32表示失败
+    {
+        CCommon::WriteLog(L"restart TrafficMonitor failed.", m_log_path.c_str());
+    }
+}
+
+
 int CTrafficMonitorApp::ExitInstance()
 {
+    //如果是通过“重启”菜单项退出的，则在退出前启动一个新的实例
+    if (m_restart_after_exit)
+    {
+        m_restart_after_exit = false;
+        RestartApplication();
+    }
+
     // 释放GDI+
     Gdiplus::GdiplusShutdown(m_gdiplusToken);
 
