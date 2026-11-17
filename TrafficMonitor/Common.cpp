@@ -182,7 +182,7 @@ bool CCommon::StringTransform(std::wstring& str, bool upper)
     return _StringTransform(str, upper);
 }
 
-//把一个版本号字符串拆成一组整数（"1.90" -> {1,90}，"1.86-pawnio-r2" -> {1,86}）
+//把一个版本号字符串拆成一组整数（"1.90" -> {1,90}，"1.86-pawnio-r2" -> {1,86}，"V2.0" -> {2,0}）
 static void VersionToNumbers(const std::wstring& version, std::vector<int>& numbers)
 {
     numbers.clear();
@@ -199,10 +199,11 @@ static void VersionToNumbers(const std::wstring& version, std::vector<int>& numb
                 value = value * 10 + static_cast<int>(ch - L'0');
                 has_digit = true;
             }
-            else
+            else if (has_digit)
             {
-                break;      //遇到非数字字符（如"86-pawnio-r2"中的'-'）时，只取前面的数字
+                break;      //数字之后的非数字字符（如"86-pawnio-r2"中的'-'）到此为止，后面不再取值
             }
+            //数字之前的非数字字符（如"V2.0"中的'V'、空格等）直接跳过，避免版本号写成"V2.0"时被判成0
         }
         numbers.push_back(has_digit ? value : 0);
     }
