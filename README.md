@@ -158,6 +158,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 | 2026-10-25 | `V1.86-pawnio` | 增加 Lite 版编译任务：无内置硬件监控、清单 `asInvoker`（不弹 UAC），硬件数据交给 `HardwareMonitor` 插件 | AI 助手（WorkBuddy） |
 | 2026-11-17 | `V1.86-pawnio-r3` | 修复鼠标提示总长超过 1024 字符时弹出“遇到不适当的参数”：绕过 MFC 的 1024 限制并按省略号截断，新增“鼠标提示内容”设置（类别/插件/长度上限），提示框改为每次运行只弹一次；后续修复：改用 `InitToolTip()` 记录注册参数（修复提示完全不显示）、长度上限默认改为 1024、长度输入改为严格校验、修正设置界面文字被截断 | AI 助手（WorkBuddy） |
 | 2026-11-01 | `V1.86-pawnio-r2` | 右键菜单在“帮助”与“退出”之间新增“重启”，一键重启程序，方便调试插件（含配套新图标与 18 种语言文本） | AI 助手（WorkBuddy） |
+| 2026-11-17 | `V1.86-pawnio-r3` | 把“检查更新”的更新源从上游 `zhongyang219/TrafficMonitor` 改为本仓库 `anye1998/TrafficMonitor`，`version_utf8.info` 的下载地址改为本仓库的 Release 资产 | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
 
@@ -452,3 +453,30 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 * [Gitee页面（gitee.com/zhongyang219/TrafficMonitor）](https://gitee.com/zhongyang219/TrafficMonitor)
 * [作者本人的百度网盘共享链接](https://pan.baidu.com/s/15PMt7s-ASpyDwtS__4cUhg) 提取码：`ou0m`
 
+## 2026-11-17 · 检查更新指向本仓库
+
+**性质**：本 Fork 的本地修改，**由 AI 助手（WorkBuddy）完成**。
+
+### 1. 改动
+
+| 文件 | 改动 |
+|---|---|
+| `TrafficMonitor/UpdateHelper.cpp` | 版本清单地址由 `zhongyang219/TrafficMonitor` 改为 `anye1998/TrafficMonitor`：GitHub 源用 `raw.githubusercontent.com/.../version_utf8.info`（失败回退 `github.com/.../blob/master/version_utf8.info`）；Gitee 源先试 `gitee.com/anye1998/...`（以后建镜像即生效），失败回退 GitHub 上的同一个文件 |
+| `version_utf8.info` | `<GitHub>` / `<Gitee>` 两段的下载地址改为本仓库 Release 资产：x64 标准版 → `V1.86-pawnio-r2_x64.zip`，x64 Lite 版 → `V1.86-pawnio-r2_x64_Lite.zip`；x86 / arm64ec 本仓库不产出，统一指向 releases 页面 |
+
+- 更新清单是从**默认分支 `master`** 读取的，所以这份 `version_utf8.info` 必须合并到 `master` 后，检查更新才会读到新内容。
+- 代码里仍保留“更新源：GitHub / Gitee”选项；本分支没有 Gitee 镜像，选 Gitee 时也会回退到 GitHub，不会导致检查更新不可用。
+
+### 2. 发新版本时要改的三处
+
+1. `TrafficMonitor/stdafx.h` 的 `VERSION`；
+2. `version_utf8.info` 的 `<version>`（与上一项保持一致）；
+3. `version_utf8.info` 里两条资产链接的文件名（`..._x64.zip` / `..._x64_Lite.zip`）。
+
+> 现在两边都是 `1.86`，所以检查更新的结果是“已是最新版本”。等发布 `V1.86-pawnio-r3` 时把这三处一起改成 `1.86-pawnio-r3`，旧版本用户才会收到提示。
+
+### 3. 验证
+
+1. 菜单「帮助 → 检查更新」或「选项设置 → 常规设置 → 检查更新」→ 应提示“已是最新版本”，不再出现“检查更新出错”；
+2. 断网/改错地址时应提示“检查更新出错”，说明确实是从本仓库拉取；
+3. 把 `<version>` 临时改成 `1.87` 再点检查更新 → 应弹出新版本提示，点“是”打开的下载页是本仓库的 Release。

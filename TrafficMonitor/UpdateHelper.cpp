@@ -24,11 +24,11 @@ bool CUpdateHelper::CheckForUpdate()
     //使用GitHub更新源
     if (m_update_source == UpdateSource::GitHubSource)
     {
-        if (CCommon::GetURL(L"https://raw.githubusercontent.com/zhongyang219/TrafficMonitor/master/version_utf8.info", version_info, true))     //获取版本信息
+        if (CCommon::GetURL(L"https://raw.githubusercontent.com/anye1998/TrafficMonitor/master/version_utf8.info", version_info, true))     //获取版本信息
         {
             m_row_data = true;
         }
-        else if (CCommon::GetURL(L"https://github.com/zhongyang219/TrafficMonitor/blob/master/version_utf8.info", version_info, true))      //获取版本信息
+        else if (CCommon::GetURL(L"https://github.com/anye1998/TrafficMonitor/blob/master/version_utf8.info", version_info, true))      //获取版本信息
         {
             m_row_data = false;
         }
@@ -53,7 +53,10 @@ bool CUpdateHelper::CheckForUpdate()
     //使用Gitee更新源
     else
     {
-        if (!CCommon::GetURL(L"https://gitee.com/zhongyang219/TrafficMonitor/raw/master/version_utf8.info", version_info, true))     //获取版本信息
+        //本分支目前没有 Gitee 镜像，Gitee 源先尝试 gitee.com（以后建了镜像就会生效），
+        //失败时回退到 GitHub 上的同一个文件，避免“更新源”选成 Gitee 之后检查更新直接不可用
+        if (!CCommon::GetURL(L"https://gitee.com/anye1998/TrafficMonitor/raw/master/version_utf8.info", version_info, true)
+            && !CCommon::GetURL(L"https://raw.githubusercontent.com/anye1998/TrafficMonitor/master/version_utf8.info", version_info, true))
             return false;
     }
 
