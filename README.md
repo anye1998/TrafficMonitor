@@ -529,9 +529,13 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 
 ### 4. 发版注意
 
-`version_utf8.info` 里的 `<version>` 现在是 `1.90`，与 `VERSION` 一致，所以“检查更新”显示“已是最新版本”。
-发布 1.90 时记得把 `link_x64` / `link_without_temperature_x64` 换成 1.90 的资产文件名
-（现在是 `V1.86-pawnio-r2` 的资产，只影响旧版本用户点“下载”时拿到的文件）。
+`version_utf8.info` 的 `<version>` 是 `1.90`，与 `VERSION` 一致，因此本版本“检查更新”显示“已是最新版本”；
+`link_x64` / `link_without_temperature_x64` 已指向 `V1.90` 的发布资产
+（`TrafficMonitor_V1.90_x64.zip`、`TrafficMonitor_V1.90_x64_Lite.zip`），
+`<update_contents>` 也换成了 1.90 的实际更新内容。
+
+以后再发版时，只需同步修改四处：`stdafx.h` 的 `VERSION`、`rc` 里的四个版本字段、
+`version_utf8.info` 的 `<version>` 与两条资产链接。
 
 ### 5. 验证
 
