@@ -346,6 +346,28 @@ struct TaskBarSettingData : public PublicSettingData
     bool is_windows_web_experience_detected{ false }; //是否检测到Windows Web Experience小组件安装信息
 };
 
+//鼠标提示中可以显示的内容类别（可以按位组合）
+enum ToolTipCategory : unsigned int
+{
+    TC_TODAY_TRAFFIC = 1 << 0,      //今日流量
+    TC_NET_SPEED = 1 << 1,          //网速
+    TC_CPU_USAGE = 1 << 2,          //CPU利用率
+    TC_MEMORY = 1 << 3,             //内存
+    TC_CPU_FREQ = 1 << 4,           //CPU频率
+    TC_GPU_USAGE = 1 << 5,          //显卡利用率
+    TC_TEMPERATURE = 1 << 6,        //温度
+    TC_HDD_USAGE = 1 << 7,          //硬盘利用率
+    TC_PLUGIN = 1 << 8              //插件提供的提示
+};
+
+//所有提示类别（默认全部显示）
+#define TOOLTIP_CATEGORY_ALL 0x01FFu
+
+//鼠标提示文本长度限制（以字符为单位）的有效范围和默认值
+#define TOOLTIP_TEXT_LENGTH_MIN 512
+#define TOOLTIP_TEXT_LENGTH_MAX 8192
+#define TOOLTIP_TEXT_LENGTH_DEFAULT 4096
+
 //选项设置中“常规设置”的数据
 struct GeneralSettingData
 {
@@ -404,6 +426,18 @@ struct GeneralSettingData
     }
 
     StringSet connections_hide;     //用于保存哪些网络要从“选择网络连接”子菜单项中隐藏
+
+    //鼠标提示设置（对主窗口和任务栏窗口同时生效）
+    unsigned int tooltip_categories{ TOOLTIP_CATEGORY_ALL };    //鼠标提示中要显示的内容类别
+    StringSet tooltip_plugin_hide;          //不在鼠标提示中显示提示的插件（保存插件dll的文件名）
+    int tooltip_max_length{ TOOLTIP_TEXT_LENGTH_DEFAULT };  //鼠标提示文本的最大字符数
+    bool tooltip_notify_truncated{ true };  //鼠标提示文本被截断时是否弹出提示（每次程序运行只弹出一次）
+
+    //判断一个鼠标提示的内容类别是否启用
+    bool IsToolTipCategoryEnable(unsigned int category) const
+    {
+        return (tooltip_categories & category) != 0;
+    }
 };
 
 //定义监控时间间隔有效的最大值和最小值

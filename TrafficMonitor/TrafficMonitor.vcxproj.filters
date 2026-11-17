@@ -397,6 +397,12 @@
     <ClInclude Include="Test.h">
       <Filter>测试</Filter>
     </ClInclude>
+    <ClInclude Include="ToolTipHelper.h">
+      <Filter>源文件和头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ToolTipSettingsDlg.h">
+      <Filter>源文件和头文件\对话框类\选项设置对话框</Filter>
+    </ClInclude>
     <ClInclude Include="WIC.h">
       <Filter>源文件和头文件\公共的类\WIC</Filter>
     </ClInclude>
@@ -695,6 +701,12 @@
     </ClCompile>
     <ClCompile Include="Test.cpp">
       <Filter>测试</Filter>
+    </ClCompile>
+    <ClCompile Include="ToolTipHelper.cpp">
+      <Filter>源文件和头文件</Filter>
+    </ClCompile>
+    <ClCompile Include="ToolTipSettingsDlg.cpp">
+      <Filter>源文件和头文件\对话框类\选项设置对话框</Filter>
     </ClCompile>
     <ClCompile Include="WIC.cpp">
       <Filter>源文件和头文件\公共的类\WIC</Filter>

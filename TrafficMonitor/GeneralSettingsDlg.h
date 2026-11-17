@@ -100,6 +100,7 @@ public:
     afx_msg void OnBnClickedMbdCheck();
     afx_msg void OnCbnSelchangeSelectCpuCombo();
     afx_msg void OnBnClickedPluginManageButton();
+    afx_msg void OnBnClickedToolTipContentButton();
     afx_msg void OnBnClickedShowNotifyIconCheck();
     afx_msg void OnBnClickedSelectConnectionsButton();
     afx_msg void OnBnClickedResetAutoRunButton();

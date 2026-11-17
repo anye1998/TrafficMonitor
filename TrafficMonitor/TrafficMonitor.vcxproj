@@ -859,6 +859,8 @@
     <ClInclude Include="TaskbarItemOrderHelper.h" />
     <ClInclude Include="TaskBarSettingsDlg.h" />
     <ClInclude Include="Test.h" />
+    <ClInclude Include="ToolTipHelper.h" />
+    <ClInclude Include="ToolTipSettingsDlg.h" />
     <ClInclude Include="TinyXml2Helper.h" />
     <ClInclude Include="tinyxml2\tinyxml2.h" />
     <ClInclude Include="TrafficMonitor.h" />
@@ -968,6 +970,8 @@
     <ClCompile Include="TaskbarItemOrderHelper.cpp" />
     <ClCompile Include="TaskBarSettingsDlg.cpp" />
     <ClCompile Include="Test.cpp" />
+    <ClCompile Include="ToolTipHelper.cpp" />
+    <ClCompile Include="ToolTipSettingsDlg.cpp" />
     <ClCompile Include="TinyXml2Helper.cpp" />
     <ClCompile Include="tinyxml2\tinyxml2.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>

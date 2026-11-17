@@ -12,6 +12,7 @@
 #include "DrawCommonFactory.h"
 #include "WindowsWebExperienceDetector.h"
 #include "TaskbarHelper.h"
+#include "ToolTipHelper.h"
 
 #ifdef DEBUG
 // DX调试信息捕获
@@ -634,56 +635,62 @@ CString CTaskBarDlg::GetMouseTipsInfo()
 {
     CString tip_info;
     CString temp;
-    temp.Format(_T("%s: %s\r\n (%s: %s/%s: %s)"), CCommon::LoadText(IDS_TRAFFIC_USED_TODAY),
-        CCommon::KBytesToString((theApp.m_today_up_traffic + theApp.m_today_down_traffic) / 1024u),
-        CCommon::LoadText(IDS_UPLOAD), CCommon::KBytesToString(theApp.m_today_up_traffic / 1024u),
-        CCommon::LoadText(IDS_DOWNLOAD), CCommon::KBytesToString(theApp.m_today_down_traffic / 1024u)
-    );
-    tip_info += temp;
-    if (!IsItemShow(TDI_UP))
+    if (CToolTipHelper::IsCategoryEnabled(TC_TODAY_TRAFFIC))    //提示内容设置中是否勾选了“今日流量”
+    {
+        temp.Format(_T("%s: %s\r\n (%s: %s/%s: %s)"), CCommon::LoadText(IDS_TRAFFIC_USED_TODAY),
+            CCommon::KBytesToString((theApp.m_today_up_traffic + theApp.m_today_down_traffic) / 1024u),
+            CCommon::LoadText(IDS_UPLOAD), CCommon::KBytesToString(theApp.m_today_up_traffic / 1024u),
+            CCommon::LoadText(IDS_DOWNLOAD), CCommon::KBytesToString(theApp.m_today_down_traffic / 1024u)
+        );
+        tip_info += temp;
+    }
+    if (CToolTipHelper::IsCategoryEnabled(TC_NET_SPEED) && !IsItemShow(TDI_UP))
     {
         temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_UPLOAD),
             CCommon::DataSizeToString(theApp.m_out_speed, theApp.m_taskbar_data));
         tip_info += temp;
     }
-    if (!IsItemShow(TDI_DOWN))
+    if (CToolTipHelper::IsCategoryEnabled(TC_NET_SPEED) && !IsItemShow(TDI_DOWN))
     {
         temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_DOWNLOAD),
             CCommon::DataSizeToString(theApp.m_in_speed, theApp.m_taskbar_data));
         tip_info += temp;
     }
-    if (!IsItemShow(TDI_CPU))
+    if (CToolTipHelper::IsCategoryEnabled(TC_CPU_USAGE) && !IsItemShow(TDI_CPU))
     {
         temp.Format(_T("\r\n%s: %d %%"), CCommon::LoadText(IDS_CPU_USAGE), theApp.m_cpu_usage);
         tip_info += temp;
     }
-    if (!IsShowCpuMemory())
+    if (CToolTipHelper::IsCategoryEnabled(TC_MEMORY) && !IsShowCpuMemory())
     {
         temp.Format(_T("\r\n%s: %s/%s"),
             CCommon::LoadText(IDS_MEMORY_USAGE),
             CCommon::KBytesToString(theApp.m_used_memory), CCommon::KBytesToString(theApp.m_total_memory));
     }
-    if (!IsItemShow(TDI_MEMORY))
+    if (CToolTipHelper::IsCategoryEnabled(TC_MEMORY))       //提示内容设置中是否勾选了“内存”
     {
-        temp.Format(_T("\r\n%s: %s/%s (%d %%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
-            CCommon::KBytesToString(theApp.m_used_memory),
-            CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
-        tip_info += temp;
+        if (!IsItemShow(TDI_MEMORY))
+        {
+            temp.Format(_T("\r\n%s: %s/%s (%d %%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
+                CCommon::KBytesToString(theApp.m_used_memory),
+                CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
+            tip_info += temp;
+        }
+        else
+        {
+            temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
+                CCommon::KBytesToString(theApp.m_used_memory),
+                CCommon::KBytesToString(theApp.m_total_memory));
+            tip_info += temp;
+        }
     }
-    else
-    {
-        temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
-            CCommon::KBytesToString(theApp.m_used_memory),
-            CCommon::KBytesToString(theApp.m_total_memory));
-        tip_info += temp;
-    }
-    if (!IsItemShow(TDI_CPU_FREQ) && theApp.m_cpu_freq > 0)
+    if (CToolTipHelper::IsCategoryEnabled(TC_CPU_FREQ) && !IsItemShow(TDI_CPU_FREQ) && theApp.m_cpu_freq > 0)
     {
         temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_CPU_FREQ), CCommon::FreqToString(theApp.m_cpu_freq, theApp.m_taskbar_data));
         tip_info += temp;
     }
 
-    if (!IsItemShow(TDI_GPU_USAGE) && theApp.m_gpu_usage >= 0)
+    if (CToolTipHelper::IsCategoryEnabled(TC_GPU_USAGE) && !IsItemShow(TDI_GPU_USAGE) && theApp.m_gpu_usage >= 0)
     {
         temp.Format(_T("\r\n%s: %d %%"), CCommon::LoadText(IDS_GPU_USAGE), theApp.m_gpu_usage);
         tip_info += temp;
@@ -691,7 +698,7 @@ CString CTaskBarDlg::GetMouseTipsInfo()
 
 #ifndef WITHOUT_TEMPERATURE
     CTrafficMonitorDlg* pMainWnd = dynamic_cast<CTrafficMonitorDlg*>(theApp.m_pMainWnd);
-    if (pMainWnd->IsTemperatureNeeded())
+    if (CToolTipHelper::IsCategoryEnabled(TC_TEMPERATURE) && pMainWnd != nullptr && pMainWnd->IsTemperatureNeeded())
     {
         if (!IsItemShow(TDI_CPU_TEMP) && theApp.m_cpu_temperature > 0)
         {
@@ -715,13 +722,13 @@ CString CTaskBarDlg::GetMouseTipsInfo()
         }
     }
 #endif
-    if (!IsItemShow(TDI_HDD_USAGE) && theApp.m_hdd_usage >= 0)
+    if (CToolTipHelper::IsCategoryEnabled(TC_HDD_USAGE) && !IsItemShow(TDI_HDD_USAGE) && theApp.m_hdd_usage >= 0)
     {
         temp.Format(_T("\r\n%s: %d %%"), CCommon::LoadText(IDS_HDD_USAGE), theApp.m_hdd_usage);
         tip_info += temp;
     }
 
-    //添加插件项目的鼠标提示
+    //添加插件项目的鼠标提示（提示内容设置中“插件提示”的类别以及每个插件的开关在GetPlauginTooltipInfo函数中判断）
     tip_info += theApp.GetPlauginTooltipInfo().c_str();
 
     return tip_info;
@@ -964,7 +971,9 @@ void CTaskBarDlg::UpdateToolTips()
     {
         CString tip_info;
         tip_info = GetMouseTipsInfo();
-        m_tool_tips.UpdateTipText(tip_info, this);
+        //使用CToolTipHelper::UpdateTipText代替m_tool_tips.UpdateTipText，
+        //以突破MFC对提示文本1024个字符的长度限制，并在文本超长时用省略号代替超出部分
+        CToolTipHelper::UpdateTipText(m_tool_tips, this, tip_info);
     }
 }
 

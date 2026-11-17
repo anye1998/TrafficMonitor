@@ -14,6 +14,8 @@
 #include "WindowsSettingHelper.h"
 #include "SkinManager.h"
 #include "SettingsHelper.h"
+#include "ToolTipHelper.h"
+#include "FilePathHelper.h"
 #ifndef DISABLE_WINDOWS_WEB_EXPERIENCE_DETECTOR
 #include "winrt/base.h"
 #endif
@@ -84,6 +86,16 @@ void CTrafficMonitorApp::LoadConfig()
     std::vector<std::wstring> connections_hide;
     ini.GetStringList(L"general", L"connections_hide", connections_hide, std::vector<std::wstring>{});
     m_general_data.connections_hide.FromVector(connections_hide);
+
+    //鼠标提示设置
+    m_general_data.tooltip_categories = static_cast<unsigned int>(ini.GetInt(L"tooltip", L"categories", static_cast<int>(TOOLTIP_CATEGORY_ALL))) & TOOLTIP_CATEGORY_ALL;
+    std::vector<std::wstring> tooltip_plugin_hide;
+    ini.GetStringList(L"tooltip", L"plugin_hide", tooltip_plugin_hide, std::vector<std::wstring>{});
+    m_general_data.tooltip_plugin_hide.FromVector(tooltip_plugin_hide);
+    m_general_data.tooltip_max_length = ini.GetInt(L"tooltip", L"max_length", TOOLTIP_TEXT_LENGTH_DEFAULT);
+    if (m_general_data.tooltip_max_length < TOOLTIP_TEXT_LENGTH_MIN || m_general_data.tooltip_max_length > TOOLTIP_TEXT_LENGTH_MAX)
+        m_general_data.tooltip_max_length = TOOLTIP_TEXT_LENGTH_DEFAULT;     //读取到的值无效时使用默认值
+    m_general_data.tooltip_notify_truncated = ini.GetBool(L"tooltip", L"notify_truncated", true);
 
     //Windows10颜色模式设置
     bool is_windows10_light_theme = CWindowsSettingHelper::IsWindows10LightTheme();
@@ -441,6 +453,12 @@ void CTrafficMonitorApp::SaveConfig()
     ini.WriteBool(_T("other"), _T("show_dot_net_notinstalled_tip"), m_show_dot_net_notinstalled_tip);
 
     ini.WriteString(L"config", L"plugin_disabled", m_cfg_data.plugin_disabled.ToString());
+
+    //鼠标提示设置
+    ini.WriteInt(L"tooltip", L"categories", static_cast<int>(m_general_data.tooltip_categories));
+    ini.WriteString(L"tooltip", L"plugin_hide", m_general_data.tooltip_plugin_hide.ToString());
+    ini.WriteInt(L"tooltip", L"max_length", m_general_data.tooltip_max_length);
+    ini.WriteBool(L"tooltip", L"notify_truncated", m_general_data.tooltip_notify_truncated);
 
     ini.WriteString(L"app", L"version", VERSION);
 
@@ -1217,10 +1235,17 @@ bool CTrafficMonitorApp::IsForceShowNotifyIcon()
 std::wstring CTrafficMonitorApp::GetPlauginTooltipInfo() const
 {
     std::wstring tip_info;
+    //如果用户在提示内容设置中取消了“插件提示”，则不在鼠标提示中显示任何插件的提示
+    if (!CToolTipHelper::IsCategoryEnabled(TC_PLUGIN))
+        return tip_info;
     for (const auto& item : m_plugins.GetPlugins())
     {
         if (item.plugin != nullptr && item.plugin->GetAPIVersion() >= 2)
         {
+            //如果用户在提示内容设置中取消了该插件的提示，则跳过该插件
+            const std::wstring plugin_file_name{ CFilePathHelper(item.file_path).GetFileName() };
+            if (!CToolTipHelper::IsPluginEnabled(plugin_file_name))
+                continue;
             std::wstring plugin_tooltip = item.plugin->GetTooltipInfo();
             CCommon::StringNormalize(plugin_tooltip);
             if (!plugin_tooltip.empty())

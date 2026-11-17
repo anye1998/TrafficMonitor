@@ -18,6 +18,7 @@
 #include "WineTaskbarDlg.h"
 #include "TaskbarHelper.h"
 #include "SkinManager.h"
+#include "ToolTipHelper.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -145,56 +146,62 @@ CString CTrafficMonitorDlg::GetMouseTipsInfo()
 {
     CString tip_info;
     CString temp;
-    temp.Format(_T("%s: %s\r\n (%s: %s/%s: %s)"), CCommon::LoadText(IDS_TRAFFIC_USED_TODAY),
-        CCommon::KBytesToString((theApp.m_today_up_traffic + theApp.m_today_down_traffic) / 1024u),
-        CCommon::LoadText(IDS_UPLOAD), CCommon::KBytesToString(theApp.m_today_up_traffic / 1024u),
-        CCommon::LoadText(IDS_DOWNLOAD), CCommon::KBytesToString(theApp.m_today_down_traffic / 1024u)
-    );
-    tip_info += temp;
+    if (CToolTipHelper::IsCategoryEnabled(TC_TODAY_TRAFFIC))    //提示内容设置中是否勾选了“今日流量”
+    {
+        temp.Format(_T("%s: %s\r\n (%s: %s/%s: %s)"), CCommon::LoadText(IDS_TRAFFIC_USED_TODAY),
+            CCommon::KBytesToString((theApp.m_today_up_traffic + theApp.m_today_down_traffic) / 1024u),
+            CCommon::LoadText(IDS_UPLOAD), CCommon::KBytesToString(theApp.m_today_up_traffic / 1024u),
+            CCommon::LoadText(IDS_DOWNLOAD), CCommon::KBytesToString(theApp.m_today_down_traffic / 1024u)
+        );
+        tip_info += temp;
+    }
     const CSkinFile::Layout& skin_layout{ theApp.m_cfg_data.m_show_more_info ? m_skin.GetLayoutInfo().layout_l : m_skin.GetLayoutInfo().layout_s }; //当前的皮肤布局
-    if (!skin_layout.GetItem(TDI_UP).show)      //如果主窗口中没有显示上传速度，则在提示信息中显示上传速度
+    if (CToolTipHelper::IsCategoryEnabled(TC_NET_SPEED) && !skin_layout.GetItem(TDI_UP).show)      //如果主窗口中没有显示上传速度，则在提示信息中显示上传速度
     {
         temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_UPLOAD),
             CCommon::DataSizeToString(theApp.m_out_speed, theApp.m_main_wnd_data));
         tip_info += temp;
     }
-    if (!skin_layout.GetItem(TDI_DOWN).show)
+    if (CToolTipHelper::IsCategoryEnabled(TC_NET_SPEED) && !skin_layout.GetItem(TDI_DOWN).show)
     {
         temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_DOWNLOAD),
             CCommon::DataSizeToString(theApp.m_in_speed, theApp.m_main_wnd_data));
         tip_info += temp;
     }
-    if (!skin_layout.GetItem(TDI_CPU).show)
+    if (CToolTipHelper::IsCategoryEnabled(TC_CPU_USAGE) && !skin_layout.GetItem(TDI_CPU).show)
     {
         temp.Format(_T("\r\n%s: %d %%"), CCommon::LoadText(IDS_CPU_USAGE), theApp.m_cpu_usage);
         tip_info += temp;
     }
-    if (!skin_layout.GetItem(TDI_MEMORY).show)
+    if (CToolTipHelper::IsCategoryEnabled(TC_MEMORY))       //提示内容设置中是否勾选了“内存”
     {
-        temp.Format(_T("\r\n%s: %s/%s (%d %%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
-            CCommon::KBytesToString(theApp.m_used_memory),
-            CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
-        tip_info += temp;
+        if (!skin_layout.GetItem(TDI_MEMORY).show)
+        {
+            temp.Format(_T("\r\n%s: %s/%s (%d %%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
+                CCommon::KBytesToString(theApp.m_used_memory),
+                CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
+            tip_info += temp;
+        }
+        else
+        {
+            temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
+                CCommon::KBytesToString(theApp.m_used_memory),
+                CCommon::KBytesToString(theApp.m_total_memory));
+            tip_info += temp;
+        }
     }
-    else
-    {
-        temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
-            CCommon::KBytesToString(theApp.m_used_memory),
-            CCommon::KBytesToString(theApp.m_total_memory));
-        tip_info += temp;
-    }
-    if (!skin_layout.GetItem(TDI_CPU_FREQ).show && theApp.m_cpu_freq >= 0)
+    if (CToolTipHelper::IsCategoryEnabled(TC_CPU_FREQ) && !skin_layout.GetItem(TDI_CPU_FREQ).show && theApp.m_cpu_freq >= 0)
     {
         temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_CPU_FREQ), CCommon::FreqToString(theApp.m_cpu_freq, theApp.m_main_wnd_data));
         tip_info += temp;
     }
-    if (!skin_layout.GetItem(TDI_GPU_USAGE).show && theApp.m_gpu_usage >= 0)
+    if (CToolTipHelper::IsCategoryEnabled(TC_GPU_USAGE) && !skin_layout.GetItem(TDI_GPU_USAGE).show && theApp.m_gpu_usage >= 0)
     {
         temp.Format(_T("\r\n%s: %d %%"), CCommon::LoadText(IDS_GPU_USAGE), theApp.m_gpu_usage);
         tip_info += temp;
     }
 #ifndef WITHOUT_TEMPERATURE
-    if (IsTemperatureNeeded())
+    if (CToolTipHelper::IsCategoryEnabled(TC_TEMPERATURE) && IsTemperatureNeeded())
     {
         if (theApp.m_general_data.IsHardwareEnable(HI_CPU) && !skin_layout.GetItem(TDI_CPU_TEMP).show && theApp.m_cpu_temperature > 0)
         {
@@ -218,13 +225,13 @@ CString CTrafficMonitorDlg::GetMouseTipsInfo()
         }
     }
 #endif
-    if (!skin_layout.GetItem(TDI_HDD_USAGE).show && theApp.m_hdd_usage >= 0)
+    if (CToolTipHelper::IsCategoryEnabled(TC_HDD_USAGE) && !skin_layout.GetItem(TDI_HDD_USAGE).show && theApp.m_hdd_usage >= 0)
     {
         temp.Format(_T("\r\n%s: %d %%"), CCommon::LoadText(IDS_HDD_USAGE), theApp.m_hdd_usage);
         tip_info += temp;
-}
+    }
 
-    //添加插件项目的鼠标提示
+    //添加插件项目的鼠标提示（提示内容设置中“插件提示”的类别以及每个插件的开关在GetPlauginTooltipInfo函数中判断）
     tip_info += theApp.GetPlauginTooltipInfo().c_str();
 
     //if (IsTaskbarWndValid())
@@ -795,6 +802,9 @@ void CTrafficMonitorDlg::ApplySettings(COptionsDlg& optionsDlg)
     theApp.SendSettingsToPlugin();
 
     CGeneralSettingsDlg::CheckTaskbarDisplayItem();
+
+    //提示内容设置可能已经改变，立即刷新鼠标提示的内容
+    PostMessage(WM_MONITOR_INFO_UPDATED, 0, 0);
 
     SetTextFont();
 
@@ -2894,7 +2904,9 @@ afx_msg LRESULT CTrafficMonitorDlg::OnMonitorInfoUpdated(WPARAM wParam, LPARAM l
     {
         CString tip_info;
         tip_info = GetMouseTipsInfo();
-        m_tool_tips.UpdateTipText(tip_info, this);
+        //使用CToolTipHelper::UpdateTipText代替m_tool_tips.UpdateTipText，
+        //以突破MFC对提示文本1024个字符的长度限制，并在文本超长时用省略号代替超出部分
+        CToolTipHelper::UpdateTipText(m_tool_tips, this, tip_info);
     }
     //更新任务栏窗口鼠标提示
     if (IsTaskbarWndValid())

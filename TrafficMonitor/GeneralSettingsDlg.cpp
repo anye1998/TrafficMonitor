@@ -7,6 +7,7 @@
 #include "GeneralSettingsDlg.h"
 #include "PluginManagerDlg.h"
 #include "SelectConnectionsDlg.h"
+#include "ToolTipSettingsDlg.h"
 
 
 // CGeneralSettingsDlg dialog
@@ -127,7 +128,8 @@ bool CGeneralSettingsDlg::InitializeControls()
         { CtrlTextInfo::L1, IDC_RESTORE_DEFAULT_TIME_SPAN_BUTTON, CtrlTextInfo::W16 }
     });
     RepositionTextBasedControls({
-        { CtrlTextInfo::L4, IDC_PLUGIN_MANAGE_BUTTON, CtrlTextInfo::W32 }
+        { CtrlTextInfo::L4, IDC_PLUGIN_MANAGE_BUTTON, CtrlTextInfo::W32 },
+        { CtrlTextInfo::L3, IDC_TOOLTIP_CONTENT_BUTTON, CtrlTextInfo::W32 }
     });
 
     return true;
@@ -243,6 +245,7 @@ BEGIN_MESSAGE_MAP(CGeneralSettingsDlg, CTabDlg)
     ON_BN_CLICKED(IDC_MBD_CHECK, &CGeneralSettingsDlg::OnBnClickedMbdCheck)
     ON_CBN_SELCHANGE(IDC_SELECT_CPU_COMBO, &CGeneralSettingsDlg::OnCbnSelchangeSelectCpuCombo)
     ON_BN_CLICKED(IDC_PLUGIN_MANAGE_BUTTON, &CGeneralSettingsDlg::OnBnClickedPluginManageButton)
+    ON_BN_CLICKED(IDC_TOOLTIP_CONTENT_BUTTON, &CGeneralSettingsDlg::OnBnClickedToolTipContentButton)
     ON_BN_CLICKED(IDC_SHOW_NOTIFY_ICON_CHECK, &CGeneralSettingsDlg::OnBnClickedShowNotifyIconCheck)
     ON_BN_CLICKED(IDC_SELECT_CONNECTIONS_BUTTON, &CGeneralSettingsDlg::OnBnClickedSelectConnectionsButton)
     ON_BN_CLICKED(IDC_RESET_AUTO_RUN_BUTTON, &CGeneralSettingsDlg::OnBnClickedResetAutoRunButton)
@@ -792,6 +795,22 @@ void CGeneralSettingsDlg::OnBnClickedPluginManageButton()
     // TODO: 在此添加控件通知处理程序代码
     CPluginManagerDlg dlg;
     dlg.DoModal();
+}
+
+
+void CGeneralSettingsDlg::OnBnClickedToolTipContentButton()
+{
+    // TODO: 在此添加控件通知处理程序代码
+    CToolTipSettingsDlg dlg(m_data);
+    if (dlg.DoModal() == IDOK)
+    {
+        //只把鼠标提示相关的设置复制回来，避免覆盖其他已经修改但尚未应用的设置
+        const GeneralSettingData& new_data{ dlg.GetData() };
+        m_data.tooltip_categories = new_data.tooltip_categories;
+        m_data.tooltip_plugin_hide = new_data.tooltip_plugin_hide;
+        m_data.tooltip_max_length = new_data.tooltip_max_length;
+        m_data.tooltip_notify_truncated = new_data.tooltip_notify_truncated;
+    }
 }
 
 

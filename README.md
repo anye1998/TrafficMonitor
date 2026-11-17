@@ -156,6 +156,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 | 2026-10-25 | `V1.86-pawnio` | 硬件监控驱动从 WinRing0 迁移到 PawnIO，修复被安全软件拦截 + 加固异常处理 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 新增标准版（含硬件监控）编译流水线，解决上游 CI 只编 Lite 版、拿不到带温度的构建产物 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 增加 Lite 版编译任务：无内置硬件监控、清单 `asInvoker`（不弹 UAC），硬件数据交给 `HardwareMonitor` 插件 | AI 助手（WorkBuddy） |
+| 2026-11-17 | `V1.86-pawnio-r3` | 修复鼠标提示总长超过 1024 字符时弹出“遇到不适当的参数”：绕过 MFC 的 1024 限制并按省略号截断，新增“鼠标提示内容”设置（类别/插件/长度上限），提示框改为每次运行只弹一次 | AI 助手（WorkBuddy） |
 | 2026-11-01 | `V1.86-pawnio-r2` | 右键菜单在“帮助”与“退出”之间新增“重启”，一键重启程序，方便调试插件（含配套新图标与 18 种语言文本） | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
@@ -345,6 +346,99 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 - 重启是**整个程序重启**，不是只重载插件，未写到磁盘的插件内部状态会丢失（这一点和手动退出再打开完全相同）。
 - 重启不会带上启动参数（例如更新器传入的参数），会以最普通的方式重新启动。
 - 若 `TrafficMonitor.exe` 在重启瞬间被改名/删除，新实例启动失败，只会在 `error.log` 里留一条记录，程序不会再自己回来。
+
+## 2026-11-17 · 修复鼠标提示超长导致的“遇到不适当的参数”弹窗
+
+**性质**：本 Fork 的本地修改，**由 AI 助手（WorkBuddy）完成分析与实现**，未提交到上游项目。
+
+### 1. 问题
+
+装了 MouseStatus 等插件后，程序启动约 1 秒就弹出一个只有一行“遇到不适当的参数。”的对话框；关掉后每秒还会再弹。现象与插件侧的规避手段见
+[MouseStatus V1.2.0 发布说明](https://github.com/anye1998/TrafficMonitorPlugins/releases#release-MouseStatus_V1.2.0)——插件作者当时只能把插件自己的提示压到 200 字符以内，因为“拿不到别的插件用掉了多少预算”。
+
+### 2. 根因
+
+- 主程序每秒把「主窗口/任务栏窗口的固定项 + 所有插件 `GetTooltipInfo()` 的返回值」拼成一个字符串，交给
+  `CToolTipCtrl::UpdateTipText`（`TrafficMonitorDlg.cpp::OnMonitorInfoUpdated`、`TaskBarDlg.cpp::UpdateToolTips`）。
+- MFC 在 `CToolTipCtrl::UpdateTipText`（`afxcmn.inl`）里有：
+
+  ```cpp
+  const size_t MAX_TIP_TEXT_LENGTH = 1024;
+  ENSURE_ARG(AtlStrLen(lpszText) <= MAX_TIP_TEXT_LENGTH);   // 超长即抛 CInvalidArgException
+  ```
+
+  异常从窗口过程逃出来后，由 MFC 的默认异常处理弹框，中文资源里就是“遇到不适当的参数。”。
+- 拼接过程本身**没有任何上限**：插件越多、插件提示越长越容易踩线。插件首次启动时还没有数据，走的正好是最长分支
+  （“未检测到在线鼠标” + 日志文件的完整路径），最容易超过 1024。
+- 卡口在 MFC 的封装里，**只在插件侧改治不了根**：总长超了 1024 依然会弹。
+
+### 3. 改动
+
+| 文件 | 改动 |
+|---|---|
+| `TrafficMonitor/ToolTipHelper.h/.cpp`（新增） | 提示文本的长度控制与安全更新：`UpdateTipText()` 直接向提示框控件发 `TTM_UPDATETIPTEXT`（与 MFC 实现等价，只是去掉 1024 检查）；`LimitText()` 按“字符数 + 可见行数”双上限**按整行**截断并追加省略号；`NotifyTruncated()` 用静态标志保证每次运行只提示一次 |
+| `TrafficMonitor/CommonData.h` | 新增 `ToolTipCategory` 类别枚举、`TOOLTIP_TEXT_LENGTH_*` 常量；`GeneralSettingData` 增加 `tooltip_categories` / `tooltip_plugin_hide` / `tooltip_max_length` / `tooltip_notify_truncated` |
+| `TrafficMonitor/TrafficMonitorDlg.cpp` | `GetMouseTipsInfo()` 逐项按类别开关过滤；`OnMonitorInfoUpdated()` 改用 `CToolTipHelper::UpdateTipText`；`ApplySettings()` 里补一次 `WM_MONITOR_INFO_UPDATED`，让改完设置立即生效 |
+| `TrafficMonitor/TaskBarDlg.cpp` | 同上（任务栏窗口的提示），并给 `pMainWnd` 加了空指针判断 |
+| `TrafficMonitor/TrafficMonitor.cpp` | `GetPlauginTooltipInfo()` 按“插件提示”类别与单个插件开关过滤；`LoadConfig()/SaveConfig()` 读写 `[tooltip]` 段 |
+| `TrafficMonitor/ToolTipSettingsDlg.h/.cpp`（新增） | “鼠标提示内容”对话框：8 个固定类别 + 插件清单（复选框）+ 长度上限（512~8192）+ 截断提示开关 + 恢复默认 |
+| `TrafficMonitor/GeneralSettingsDlg.*`、`resource.h`、`TrafficMonitor.rc` | “常规设置 → 高级”里新增“鼠标提示内容…”按钮；新增 `IDD_TOOLTIP_SETTINGS_DIALOG` 与 18 个控件 ID（1241~1258，已避开现有 ID，含原先 `_APS_NEXT_CONTROL_VALUE` 与实际占用不一致的坑） |
+| `TrafficMonitor/language.h`、`language/{English,Simplified_Chinese,Traditional_Chinese}.ini` | 新增 23 条字符串；其余 15 种语言回落到内置的英文表，不会出现空白或 `TXT_XXX` 原文 |
+| `TrafficMonitor/TrafficMonitor.vcxproj(.filters)` | 加入 4 个新文件 |
+
+关键设计：
+
+- **两条上限，取先触发的那条**：字符数（默认 4096，可调 512~8192）+ 可见行数（按当前显示器工作区高度估算）。
+  只放宽字符数不管高度的话，提示框会高到超出屏幕，反而更难用。
+- **按整行截断**：只在 `\r\n` 处切断，不会切出半行残字；被切掉的部分替换为 `…（已省略 N 个字符）`。
+- **先按原上限算，真超了才给省略号腾位置**：文本正好等于上限时不会被无故截断。
+- **异常从源头消失**：`TTM_UPDATETIPTEXT` 不抛异常，`CInvalidArgException` 不再产生。
+- **有对话框开着时不弹提示**：`CBaseDialog::IsAllDialogClosed()` 为 false 时先跳过，等下一次刷新再判断，避免提示框被选项设置挡住。
+
+行为变化：
+
+| 项 | 之前 | 现在 |
+|---|---|---|
+| 拼接总长 1024+ | 抛异常 → 每秒弹一次“遇到不适当的参数。” | 正常显示，超出上限的部分按省略号截断 |
+| 提示文本上限 | 隐式 1024，不可调 | 默认 4096，可调 512~8192（并受可见行数限制） |
+| 显示哪些内容 | 全部显示，无法选择 | 可关类别（今日流量/网速/CPU/内存/CPU 频率/显卡/温度/硬盘），可关单个插件 |
+| 截断提示 | 每秒弹一次，文案不说明原因 | 每次运行只弹一次，文案说明原因、影响与处理办法 |
+| 配置文件 | — | `config.ini` 新增 `[tooltip]` 段：`categories` / `plugin_hide` / `max_length` / `notify_truncated` |
+
+### 4. 使用
+
+1. 右键托盘图标 → **选项设置 → 常规设置 → 高级 → 鼠标提示内容…**
+2. 取消不需要的提示类别或插件；需要时把“提示文本长度上限”调大；确定后点“应用”。
+3. 老配置文件不用动：`[tooltip]` 段缺失时按“全部类别显示、上限 4096、截断时提示一次”处理，
+   显示效果与升级前一致，只是**不再弹“遇到不适当的参数”**。
+
+### 5. 验证要点
+
+| # | 场景 | 期望 |
+|---|---|---|
+| 1 | 装 MouseStatus（V1.1.x）+ 其他插件，删除 `config.ini` 后首次启动 | 不再出现“遇到不适当的参数。”；提示内容完整 |
+| 2 | 把 `config.ini` 的 `max_length` 改成 512 后重启 | 提示按整行截断，末尾为 `…（已省略 N 个字符）` |
+| 3 | 同上，观察弹窗 | 只弹一次“鼠标提示内容过长”，关闭后即使继续运行数小时也不再出现 |
+| 4 | 提示内容设置里取消“插件提示” | 提示中不再有插件文字，任务栏窗口同样生效 |
+| 5 | 只勾选单个插件，确定后重开对话框 | 其他插件提示消失，勾选状态保持（已写入 ini） |
+| 6 | 取消所有类别后点确定 | 提示“请至少勾选一项提示内容”，对话框不关闭 |
+| 7 | 分别悬停主窗口与任务栏窗口 | 两者内容一致；字体、换行、宽度与改动前相同（`SetMaxTipWidth(600)` 未改） |
+| 8 | 100% / 150% / 200% DPI | 新对话框控件不重叠（文本自适应重排），提示框高度不超出屏幕 |
+| 9 | 切换界面语言为 English / 繁體中文 | 对话框与提示文案随之切换，无 `TXT_` 原文残留 |
+| 10 | 编译 Lite 版（`WITHOUT_TEMPERATURE`） | 温度类别不出现，其余功能正常 |
+
+### 6. 已知限制
+
+- 提示框高度受系统限制，`max_length` 调到 4096 以上时，可见行数上限（按屏幕高度估算）往往先触发，超出部分同样被省略号替代。
+- 类别与插件开关是**全局设置**，主窗口与任务栏窗口共用；是否显示提示本身仍由两个窗口各自的“显示鼠标提示”复选框控制。
+- 插件清单在对话框打开时枚举，新装插件需重新打开该对话框（或重启程序）后才会出现。
+- `HistoryTrafficCalendarDlg`、`AboutDlg` 的提示未改动（文本短、不经过插件拼接），仍走 MFC 原函数。
+
+### 7. 回滚
+
+把 `TrafficMonitorDlg.cpp::OnMonitorInfoUpdated` 和 `TaskBarDlg.cpp::UpdateToolTips` 里的
+`CToolTipHelper::UpdateTipText(...)` 改回 `m_tool_tips.UpdateTipText(tip_info, this)` 即可恢复旧行为
+（其余改动是纯新增，不影响原有路径；`[tooltip]` 段会被忽略）。
 
 # 更新日志
 
