@@ -17,6 +17,97 @@ static const int TRUNCATED_MARK_RESERVE{ 32 };
 //是否已经记录过“提示文本被截断”的日志（每次运行只记录一次，避免刷日志）
 static bool s_truncate_logged{ false };
 
+//提示框位置约束使用的子类化ID
+static const UINT_PTR TOOLTIP_SUBCLASS_ID{ 0x5454 };        //'TT'
+
+//把提示框的矩形约束到显示器的工作区内（rcWork已经排除了任务栏占用的区域）
+//hwnd_tool: 提示框所服务的窗口，用来确定提示框应该显示在哪个显示器上
+static void ClampToolTipToWorkArea(HWND hwnd_tip, HWND hwnd_tool, WINDOWPOS* p_wpos)
+{
+    if (hwnd_tip == nullptr || p_wpos == nullptr)
+        return;
+    if ((p_wpos->flags & SWP_NOMOVE) != 0)      //系统没有要求移动位置，不需要处理
+        return;
+
+    //确定参考窗口：优先使用提示框所服务的窗口，其次使用提示框的所有者窗口
+    HWND hwnd_ref{ hwnd_tool };
+    if (hwnd_ref == nullptr || !::IsWindow(hwnd_ref))
+        hwnd_ref = ::GetWindow(hwnd_tip, GW_OWNER);
+    if (hwnd_ref == nullptr || !::IsWindow(hwnd_ref))
+        hwnd_ref = hwnd_tip;
+
+    MONITORINFO monitor_info{};
+    monitor_info.cbSize = sizeof(MONITORINFO);
+    const HMONITOR h_monitor{ ::MonitorFromWindow(hwnd_ref, MONITOR_DEFAULTTONEAREST) };
+    if (h_monitor == nullptr || !::GetMonitorInfo(h_monitor, &monitor_info))
+        return;
+    const RECT& work_area{ monitor_info.rcWork };
+
+    //取提示框将要使用的尺寸（系统没有要求改变尺寸时使用当前尺寸）
+    int width;
+    int height;
+    if ((p_wpos->flags & SWP_NOSIZE) != 0)
+    {
+        RECT rect{};
+        ::GetWindowRect(hwnd_tip, &rect);
+        width = rect.right - rect.left;
+        height = rect.bottom - rect.top;
+    }
+    else
+    {
+        width = p_wpos->cx;
+        height = p_wpos->cy;
+    }
+    if (width <= 0 || height <= 0)
+        return;
+
+    //提示框比工作区还大时先缩小到工作区的大小（文本已按行数上限截断，正常情况下不会发生）
+    const int work_width{ work_area.right - work_area.left };
+    const int work_height{ work_area.bottom - work_area.top };
+    if (width > work_width)
+        width = work_width;
+    if (height > work_height)
+        height = work_height;
+
+    //如果提示框会超出工作区，就把它推回来，保证整个提示框都可见
+    int left{ p_wpos->x };
+    int top{ p_wpos->y };
+    if (left + width > work_area.right)
+        left = work_area.right - width;
+    if (left < work_area.left)
+        left = work_area.left;
+    if (top + height > work_area.bottom)
+        top = work_area.bottom - height;
+    if (top < work_area.top)
+        top = work_area.top;
+
+    p_wpos->x = left;
+    p_wpos->y = top;
+    if ((p_wpos->flags & SWP_NOSIZE) == 0)
+    {
+        p_wpos->cx = width;
+        p_wpos->cy = height;
+    }
+}
+
+static LRESULT CALLBACK ToolTipSubclassProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    switch (message)
+    {
+    case WM_WINDOWPOSCHANGING:
+        //在提示框真正移动到目标位置之前修正坐标，
+        //这样它不会先出现在任务栏后面再被移开，也就不会出现闪烁
+        ClampToolTipToWorkArea(hWnd, reinterpret_cast<HWND>(dwRefData), reinterpret_cast<WINDOWPOS*>(lParam));
+        break;
+    case WM_NCDESTROY:
+        ::RemoveWindowSubclass(hWnd, ToolTipSubclassProc, uIdSubclass);
+        break;
+    default:
+        break;
+    }
+    return ::DefSubclassProc(hWnd, message, wParam, lParam);
+}
+
 //每个提示框控件在注册工具时使用的TOOLINFO。
 //键为提示框控件的窗口句柄；TOOLINFO中的lpszText不使用，只用于定位工具。
 static std::map<HWND, TOOLINFO> s_tool_info_cache;
@@ -290,6 +381,24 @@ void CToolTipHelper::InitToolTip(CToolTipCtrl& tool_tip, CWnd* p_wnd)
     TOOLINFO tool_info{};
     if (ResolveToolInfo(tool_tip.GetSafeHwnd(), p_wnd, tool_info))
         s_tool_info_cache[tool_tip.GetSafeHwnd()] = tool_info;
+
+    //约束提示框的位置，避免窗口贴在屏幕底部时提示框被任务栏挡住
+    InstallPositionClamp(tool_tip, p_wnd);
+}
+
+
+void CToolTipHelper::InstallPositionClamp(CToolTipCtrl& tool_tip, CWnd* p_wnd)
+{
+    if (p_wnd == nullptr)
+        return;
+    const HWND hwnd_tip{ tool_tip.GetSafeHwnd() };
+    if (!::IsWindow(hwnd_tip) || !::IsWindow(p_wnd->GetSafeHwnd()))
+        return;
+
+    //系统默认的提示框只会保证不超出显示器的范围，不会避开任务栏。
+    //主窗口或任务栏窗口贴在屏幕底部时，提示框的下半部分就会落到任务栏后面。
+    //这里对提示框窗口做子类化，在它被定位时把坐标修正到显示器工作区内。
+    ::SetWindowSubclass(hwnd_tip, ToolTipSubclassProc, TOOLTIP_SUBCLASS_ID, reinterpret_cast<DWORD_PTR>(p_wnd->GetSafeHwnd()));
 }
 
 

@@ -37,6 +37,11 @@ public:
     //否则消息会静默失败，表现为鼠标提示完全不显示
     static void InitToolTip(CToolTipCtrl& tool_tip, CWnd* p_wnd);
 
+    //约束提示框的位置，使它始终完整显示在显示器的工作区内（工作区已排除任务栏）。
+    //系统默认的提示框只保证不超出显示器范围，当窗口贴在屏幕底部（例如任务栏窗口）时，
+    //提示框的下半部分会落到任务栏后面而被挡住，因此需要把提示框向上推回来
+    static void InstallPositionClamp(CToolTipCtrl& tool_tip, CWnd* p_wnd);
+
     //更新鼠标提示的文本，返回实际显示的文本
     //注意：这里不使用CToolTipCtrl::UpdateTipText，因为它限制了文本长度不能超过1024个字符
     static CString UpdateTipText(CToolTipCtrl& tool_tip, CWnd* p_wnd, const CString& text);
