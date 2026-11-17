@@ -160,6 +160,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 | 2026-11-01 | `V1.86-pawnio-r2` | 右键菜单在“帮助”与“退出”之间新增“重启”，一键重启程序，方便调试插件（含配套新图标与 18 种语言文本） | AI 助手（WorkBuddy） |
 | 2026-11-17 | `V1.86-pawnio-r3` | 把“检查更新”的更新源从上游 `zhongyang219/TrafficMonitor` 改为本仓库 `anye1998/TrafficMonitor`，`version_utf8.info` 的下载地址改为本仓库的 Release 资产 | AI 助手（WorkBuddy） |
 | 2026-11-17 | `V1.90` | 删除 Gitee 更新源（只保留 GitHub）；版本号推进到 1.90；版本比较改为按数字分段比较（修正跨版本判断）；更新日志指向本仓库；插件更新同时读取本仓库与原项目的清单 | AI 助手（WorkBuddy） |
+| 2026-11-17 | `V1.91` | 提示框位置约束到显示器工作区，不再被任务栏遮挡；修复“重置开机自动运行”按钮与“显示通知区图标”重叠 | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
 
@@ -580,3 +581,18 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 2. 任务栏窗口（嵌入任务栏的显示条）悬停 → 同样完整显示；
 3. 任务栏移到屏幕顶部/左侧后再试一次 → 提示框不应被顶部/左侧任务栏遮挡；
 4. 多显示器（含不同缩放比例）分别悬停 → 提示框应出现在光标所在的显示器上且不越界。
+
+## 2026-11-17 · V1.91 发布
+
+**性质**：本 Fork 的本地修改，**由 AI 助手（WorkBuddy）完成**。
+
+本版只包含两处界面修复，版本号由 `1.90` 升到 `1.91`：
+
+| 修复 | 说明 |
+|---|---|
+| 提示框被任务栏遮挡 | 提示框定位只保证不超出显示器范围、不避开任务栏，窗口贴在屏幕底部时下半部分会被挡住。现在对提示框窗口子类化，在 `WM_WINDOWPOSCHANGING` 中把矩形夹进 `rcWork`（见上一节） |
+| “重置”按钮与“显示通知区图标”重叠 | 删除“更新源”单选按钮时误将自动运行的两个控件上移，已恢复原坐标（`14,117` / `160,115`） |
+
+发版时同步修改的位置：`stdafx.h` 的 `VERSION`、`rc` 的四个版本字段（`1.9.1.0`）、
+`version_utf8.info` 与 `version.info` 的 `<version>`、以及 `version_utf8.info` 里两条资产链接
+（`TrafficMonitor_V1.91_x64.zip` / `TrafficMonitor_V1.91_x64_Lite.zip`）。

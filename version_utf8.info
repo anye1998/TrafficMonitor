@@ -1,16 +1,16 @@
 ﻿<root>
-	<version>1.90</version>
+	<version>1.91</version>
 	<GitHub>
 		<link>https://github.com/anye1998/TrafficMonitor/releases</link>
-		<link_x64>https://github.com/anye1998/TrafficMonitor/releases/download/V1.90/TrafficMonitor_V1.90_x64.zip</link_x64>
+		<link_x64>https://github.com/anye1998/TrafficMonitor/releases/download/V1.91/TrafficMonitor_V1.91_x64.zip</link_x64>
 		<link_arm64ec>https://github.com/anye1998/TrafficMonitor/releases</link_arm64ec>
 		<link_without_temperature>https://github.com/anye1998/TrafficMonitor/releases</link_without_temperature>
-		<link_without_temperature_x64>https://github.com/anye1998/TrafficMonitor/releases/download/V1.90/TrafficMonitor_V1.90_x64_Lite.zip</link_without_temperature_x64>
+		<link_without_temperature_x64>https://github.com/anye1998/TrafficMonitor/releases/download/V1.91/TrafficMonitor_V1.91_x64_Lite.zip</link_without_temperature_x64>
 		<link_without_temperature_arm64ec>https://github.com/anye1998/TrafficMonitor/releases</link_without_temperature_arm64ec>
 	</GitHub>
 	<update_contents>
-		<contents_zh_cn>修复鼠标提示文本超过 1024 个字符时弹出“遇到不适当的参数”的问题，超出部分改为用省略号代替。\n新增“鼠标提示内容”设置：可按类别和插件选择提示中显示的内容，提示文本长度上限可调（默认 1024，范围 512~8192），超长时按整行截断。\n提示文本被截断时，每次运行只提示一次。\n硬件监控驱动由 WinRing0 迁移到 PawnIO，避免被安全软件拦截。\n右键菜单新增“重启”。\n检查更新改为从本项目获取，并删除了 Gitee 更新源。\n版本号比较改为按数字分段比较，跨版本判断更准确。\n插件更新同时检查本项目与原项目的插件版本清单。\n“更新日志”指向本项目。</contents_zh_cn>
-		<contents_en>Fixed the issue where a dialog about an inappropriate argument appeared when the tooltip text exceeded 1024 characters; the excess part is now replaced by an ellipsis.\nAdded the "Tooltip content" settings: choose which categories and plugins are shown in the tooltip, and adjust the max tooltip length (default 1024, range 512-8192); the text is truncated at line boundaries.\nThe truncation notice is now shown only once per run of the program.\nMigrated the hardware monitoring driver from WinRing0 to PawnIO to avoid being blocked by security software.\nAdded "Restart" to the right-click menu.\nThe update check now uses this repository, and the Gitee update source has been removed.\nVersion comparison now compares numeric segments, making cross-version detection more accurate.\nPlugin updates now check both this repository and the original project version list.\nThe "Update log" menu item now opens this repository.</contents_en>
-		<contents_zh_tw>修復滑鼠提示文字超過 1024 個字元時彈出「遇到不適當的參數」的問題，超出部分改以省略號代替。\n新增「滑鼠提示內容」設定：可依類別與外掛選擇提示中顯示的內容，提示文字長度上限可調（預設 1024，範圍 512~8192），過長時按整行截斷。\n提示文字被截斷時，每次執行只提示一次。\n硬體監控驅動由 WinRing0 遷移至 PawnIO，避免被安全軟體攔截。\n右鍵選單新增「重新啟動」。\n檢查更新改為從本專案取得，並移除了 Gitee 更新來源。\n版本號比較改為依數字分段比較，跨版本判斷更準確。\n外掛更新同時檢查本專案與原專案的外掛版本清單。\n「更新日誌」指向本專案。</contents_zh_tw>
+		<contents_zh_cn>修复鼠标提示框被任务栏遮挡、显示不全的问题，提示框现在始终完整显示在显示器工作区内。\n修复“选项设置 → 常规设置”中“重置开机自动运行”按钮与“显示通知区图标”选项重叠的问题。\n其余改进见 V1.90 的发布说明（鼠标提示超长弹窗、提示内容设置、检查更新指向本项目等）。</contents_zh_cn>
+		<contents_en>Fixed the issue where the tooltip box was partially hidden behind the taskbar; the tooltip is now always kept fully inside the monitor work area.\nFixed the overlap between the "Reset" button for auto run and the "Show notification area icon" option in Options > General Settings.\nSee the V1.90 release notes for the other improvements.</contents_en>
+		<contents_zh_tw>修復滑鼠提示框被工作列遮蔽、顯示不全的問題，提示框現在始終完整顯示在顯示器工作區內。\n修復「選項設定 → 一般設定」中「重設開機自動執行」按鈕與「顯示通知區圖示」選項重疊的問題。\n其餘改進見 V1.90 的發行說明。</contents_zh_tw>
 	</update_contents>
 </root>
