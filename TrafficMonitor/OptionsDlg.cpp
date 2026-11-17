@@ -127,15 +127,6 @@ void COptionsDlg::OnSize(UINT nType, int cx, int cy)
 }
 
 
-void COptionsDlg::OnCancel()
-{
-    // TODO: 在此添加专用代码和/或调用基类
-    m_tab3_dlg.OnCancel();
-
-    CBaseDialog::OnCancel();
-}
-
-
 void COptionsDlg::OnBnClickedApplyButton()
 {
     m_tab2_dlg.SaveColorSettingToDefaultStyle();
