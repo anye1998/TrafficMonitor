@@ -227,6 +227,16 @@ CString CToolTipHelper::UpdateTipText(CToolTipCtrl& tool_tip, CWnd* p_wnd, const
     CString limited_text{ LimitText(text, GetMaxTextLength(), GetMaxVisibleLines(p_wnd), &truncated, &omitted_chars) };
 
     const HWND hwnd_tip{ tool_tip.GetSafeHwnd() };
+
+    //兜底：直接调用MFC的实现，但先把文本截到MFC允许的长度以内，否则会抛出CInvalidArgException
+    auto apply_by_mfc = [&tool_tip, p_wnd, &limited_text]()
+    {
+        CString fallback_text{ limited_text };
+        if (fallback_text.GetLength() > MFC_MAX_TIP_TEXT_LENGTH)
+            fallback_text = fallback_text.Left(MFC_MAX_TIP_TEXT_LENGTH - 1) + _T("…");
+        tool_tip.UpdateTipText(fallback_text, p_wnd);
+    };
+
     TOOLINFO tool_info{};
     if (ResolveToolInfo(hwnd_tip, p_wnd, tool_info))
     {
@@ -237,15 +247,18 @@ CString CToolTipHelper::UpdateTipText(CToolTipCtrl& tool_tip, CWnd* p_wnd, const
         //这里直接向提示框控件发送TTM_UPDATETIPTEXT消息，以绕过这一限制。
         //（这一段代码与CToolTipCtrl::UpdateTipText的实现等价，只是去掉了长度检查）
         tool_info.lpszText = const_cast<LPTSTR>(limited_text.GetString());
-        ::SendMessage(hwnd_tip, TTM_UPDATETIPTEXT, 0, reinterpret_cast<LPARAM>(&tool_info));
+        if (::SendMessage(hwnd_tip, TTM_UPDATETIPTEXT, 0, reinterpret_cast<LPARAM>(&tool_info)) == FALSE)
+        {
+            //工具信息匹配失败（正常情况下不会发生）。清掉缓存，并退回MFC的实现，
+            //保证提示至少能显示前面的一部分，而不是变成空白
+            s_tool_info_cache.erase(hwnd_tip);
+            apply_by_mfc();
+        }
     }
     else
     {
-        //没有找到已经注册的工具（正常情况下不会发生）。退回到MFC的实现，
-        //但要先把文本限制在MFC允许的长度以内，否则又会抛出CInvalidArgException
-        if (limited_text.GetLength() > MFC_MAX_TIP_TEXT_LENGTH)
-            limited_text = limited_text.Left(MFC_MAX_TIP_TEXT_LENGTH) + _T("…");
-        tool_tip.UpdateTipText(limited_text, p_wnd);
+        //提示框中没有找到已经注册的工具。退回MFC的实现
+        apply_by_mfc();
     }
 
     //只在第一次发生截断时记录一条日志，方便排查“提示长度上限没有按设置生效”之类的问题

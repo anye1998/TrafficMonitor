@@ -156,7 +156,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 | 2026-10-25 | `V1.86-pawnio` | 硬件监控驱动从 WinRing0 迁移到 PawnIO，修复被安全软件拦截 + 加固异常处理 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 新增标准版（含硬件监控）编译流水线，解决上游 CI 只编 Lite 版、拿不到带温度的构建产物 | AI 助手（WorkBuddy） |
 | 2026-10-25 | `V1.86-pawnio` | 增加 Lite 版编译任务：无内置硬件监控、清单 `asInvoker`（不弹 UAC），硬件数据交给 `HardwareMonitor` 插件 | AI 助手（WorkBuddy） |
-| 2026-11-17 | `V1.86-pawnio-r3` | 修复鼠标提示总长超过 1024 字符时弹出“遇到不适当的参数”：绕过 MFC 的 1024 限制并按省略号截断，新增“鼠标提示内容”设置（类别/插件/长度上限），提示框改为每次运行只弹一次 | AI 助手（WorkBuddy） |
+| 2026-11-17 | `V1.86-pawnio-r3` | 修复鼠标提示总长超过 1024 字符时弹出“遇到不适当的参数”：绕过 MFC 的 1024 限制并按省略号截断，新增“鼠标提示内容”设置（类别/插件/长度上限），提示框改为每次运行只弹一次；后续修复：改用 `InitToolTip()` 记录注册参数（修复提示完全不显示）、长度上限默认改为 1024、长度输入改为严格校验、修正设置界面文字被截断 | AI 助手（WorkBuddy） |
 | 2026-11-01 | `V1.86-pawnio-r2` | 右键菜单在“帮助”与“退出”之间新增“重启”，一键重启程序，方便调试插件（含配套新图标与 18 种语言文本） | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
@@ -376,7 +376,7 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 
 | 文件 | 改动 |
 |---|---|
-| `TrafficMonitor/ToolTipHelper.h/.cpp`（新增） | 提示文本的长度控制与安全更新：`UpdateTipText()` 直接向提示框控件发 `TTM_UPDATETIPTEXT`（与 MFC 实现等价，只是去掉 1024 检查）；`LimitText()` 按“字符数 + 可见行数”双上限**按整行**截断并追加省略号；`NotifyTruncated()` 用静态标志保证每次运行只提示一次 |
+| `TrafficMonitor/ToolTipHelper.h/.cpp`（新增） | 提示文本的长度控制与安全更新：`InitToolTip()` 用 MFC 的 `AddTool` 注册工具后，再用 `TTM_GETTOOLINFO` 探测并缓存这次注册实际使用的 `TOOLINFO(hwnd/uId/uFlags)`；`UpdateTipText()` 用同一组值直接发 `TTM_UPDATETIPTEXT`（与 MFC 实现等价，只是去掉 1024 检查）；`LimitText()` 按“字符数 + 可见行数”双上限**按整行**截断并追加省略号；`NotifyTruncated()` 用静态标志保证每次运行只提示一次 |
 | `TrafficMonitor/CommonData.h` | 新增 `ToolTipCategory` 类别枚举、`TOOLTIP_TEXT_LENGTH_*` 常量；`GeneralSettingData` 增加 `tooltip_categories` / `tooltip_plugin_hide` / `tooltip_max_length` / `tooltip_notify_truncated` |
 | `TrafficMonitor/TrafficMonitorDlg.cpp` | `GetMouseTipsInfo()` 逐项按类别开关过滤；`OnMonitorInfoUpdated()` 改用 `CToolTipHelper::UpdateTipText`；`ApplySettings()` 里补一次 `WM_MONITOR_INFO_UPDATED`，让改完设置立即生效 |
 | `TrafficMonitor/TaskBarDlg.cpp` | 同上（任务栏窗口的提示），并给 `pMainWnd` 加了空指针判断 |
@@ -388,7 +388,7 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 
 关键设计：
 
-- **两条上限，取先触发的那条**：字符数（默认 4096，可调 512~8192）+ 可见行数（按当前显示器工作区高度估算）。
+- **两条上限，取先触发的那条**：字符数（默认 1024，可调 512~8192）+ 可见行数（按当前显示器工作区高度估算）。
   只放宽字符数不管高度的话，提示框会高到超出屏幕，反而更难用。
 - **按整行截断**：只在 `\r\n` 处切断，不会切出半行残字；被切掉的部分替换为 `…（已省略 N 个字符）`。
 - **先按原上限算，真超了才给省略号腾位置**：文本正好等于上限时不会被无故截断。
@@ -400,7 +400,7 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 | 项 | 之前 | 现在 |
 |---|---|---|
 | 拼接总长 1024+ | 抛异常 → 每秒弹一次“遇到不适当的参数。” | 正常显示，超出上限的部分按省略号截断 |
-| 提示文本上限 | 隐式 1024，不可调 | 默认 4096，可调 512~8192（并受可见行数限制） |
+| 提示文本上限 | 隐式 1024，不可调 | 默认 1024，可调 512~8192（并受可见行数限制） |
 | 显示哪些内容 | 全部显示，无法选择 | 可关类别（今日流量/网速/CPU/内存/CPU 频率/显卡/温度/硬盘），可关单个插件 |
 | 截断提示 | 每秒弹一次，文案不说明原因 | 每次运行只弹一次，文案说明原因、影响与处理办法 |
 | 配置文件 | — | `config.ini` 新增 `[tooltip]` 段：`categories` / `plugin_hide` / `max_length` / `notify_truncated` |
@@ -409,7 +409,7 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 
 1. 右键托盘图标 → **选项设置 → 常规设置 → 高级 → 鼠标提示内容…**
 2. 取消不需要的提示类别或插件；需要时把“提示文本长度上限”调大；确定后点“应用”。
-3. 老配置文件不用动：`[tooltip]` 段缺失时按“全部类别显示、上限 4096、截断时提示一次”处理，
+3. 老配置文件不用动：`[tooltip]` 段缺失时按“全部类别显示、上限 1024、截断时提示一次”处理，
    显示效果与升级前一致，只是**不再弹“遇到不适当的参数”**。
 
 ### 5. 验证要点
@@ -429,7 +429,7 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 
 ### 6. 已知限制
 
-- 提示框高度受系统限制，`max_length` 调到 4096 以上时，可见行数上限（按屏幕高度估算）往往先触发，超出部分同样被省略号替代。
+- 提示框高度受系统限制，`max_length` 调到 1024 以上时，可见行数上限（按屏幕高度估算）往往先触发，超出部分同样被省略号替代。
 - 类别与插件开关是**全局设置**，主窗口与任务栏窗口共用；是否显示提示本身仍由两个窗口各自的“显示鼠标提示”复选框控制。
 - 插件清单在对话框打开时枚举，新装插件需重新打开该对话框（或重启程序）后才会出现。
 - `HistoryTrafficCalendarDlg`、`AboutDlg` 的提示未改动（文本短、不经过插件拼接），仍走 MFC 原函数。
