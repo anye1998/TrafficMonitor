@@ -364,9 +364,10 @@ enum ToolTipCategory : unsigned int
 #define TOOLTIP_CATEGORY_ALL 0x01FFu
 
 //鼠标提示文本长度限制（以字符为单位）的有效范围和默认值
+//默认值与MFC的MAX_TIP_TEXT_LENGTH保持一致，即1024个字符
 #define TOOLTIP_TEXT_LENGTH_MIN 512
 #define TOOLTIP_TEXT_LENGTH_MAX 8192
-#define TOOLTIP_TEXT_LENGTH_DEFAULT 4096
+#define TOOLTIP_TEXT_LENGTH_DEFAULT 1024
 
 //选项设置中“常规设置”的数据
 struct GeneralSettingData

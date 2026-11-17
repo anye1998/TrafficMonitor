@@ -4,11 +4,85 @@
 #include "Common.h"
 #include "MessageDlg.h"
 #include "BaseDialog.h"
+#include <map>
 
 bool CToolTipHelper::m_truncated_notified{ false };
 
+//MFC的CToolTipCtrl::UpdateTipText允许的最大字符数（即MAX_TIP_TEXT_LENGTH）
+static const int MFC_MAX_TIP_TEXT_LENGTH{ 1024 };
+
 //提示文本被截断后追加的省略号所占用的字符数（用于为省略号预留空间）
 static const int TRUNCATED_MARK_RESERVE{ 32 };
+
+//是否已经记录过“提示文本被截断”的日志（每次运行只记录一次，避免刷日志）
+static bool s_truncate_logged{ false };
+
+//每个提示框控件在注册工具时使用的TOOLINFO。
+//键为提示框控件的窗口句柄；TOOLINFO中的lpszText不使用，只用于定位工具。
+static std::map<HWND, TOOLINFO> s_tool_info_cache;
+
+//按照给定的hwnd/uId/uFlags尝试定位提示框中已经注册的工具
+static bool GetRegisteredTool(HWND hwnd_tip, HWND hwnd_owner, UINT_PTR u_id, UINT flags, TOOLINFO& result)
+{
+    TOOLINFO probe{};
+    probe.cbSize = sizeof(TOOLINFO);
+    probe.hwnd = hwnd_owner;
+    probe.uId = u_id;
+    probe.uFlags = flags;
+    if (::SendMessage(hwnd_tip, TTM_GETTOOLINFO, 0, reinterpret_cast<LPARAM>(&probe)) == FALSE)
+        return false;
+    probe.lpszText = nullptr;       //不保存指向提示框内部缓冲区的指针
+    result = probe;
+    return true;
+}
+
+//获取提示框控件中与p_wnd对应的工具信息
+//优先使用InitToolTip中记录的模板；如果没有（例如别处用CToolTipCtrl::AddTool注册的），
+//则按几种常见的注册方式逐一试探，避免因hwnd/uId不匹配而导致TTM_UPDATETIPTEXT静默失败
+static bool ResolveToolInfo(HWND hwnd_tip, CWnd* p_wnd, TOOLINFO& result)
+{
+    if (hwnd_tip == nullptr || p_wnd == nullptr)
+        return false;
+
+    const HWND hwnd_wnd{ p_wnd->GetSafeHwnd() };
+    CWnd* p_parent{ p_wnd->GetParent() };
+    const HWND hwnd_parent{ p_parent != nullptr ? p_parent->GetSafeHwnd() : nullptr };
+
+    auto it{ s_tool_info_cache.find(hwnd_tip) };
+    if (it != s_tool_info_cache.end())
+    {
+        //确认缓存的模板仍然有效（提示框被重建后句柄会变化，理论上不会命中旧的缓存）
+        if (GetRegisteredTool(hwnd_tip, it->second.hwnd, it->second.uId, it->second.uFlags, result))
+            return true;
+        s_tool_info_cache.erase(it);        //缓存失效，重新探测
+    }
+
+    struct Candidate
+    {
+        HWND hwnd;
+        UINT_PTR u_id;
+        UINT flags;
+    };
+    //候选1：MFC的CToolTipCtrl::AddTool(CWnd*, ...)采用的方式（hwnd为父窗口，uId为窗口句柄）
+    //候选2：以窗口自身作为hwnd
+    //候选3：以子控件ID的方式注册（uId为控件ID，hwnd为窗口）
+    const Candidate candidates[] = {
+        { hwnd_parent, reinterpret_cast<UINT_PTR>(hwnd_wnd), TTF_IDISHWND },
+        { hwnd_wnd, reinterpret_cast<UINT_PTR>(hwnd_wnd), TTF_IDISHWND },
+        { hwnd_wnd, 0, 0 },
+    };
+    for (const auto& candidate : candidates)
+    {
+        if (candidate.hwnd == nullptr && candidate.u_id == 0)
+            continue;
+        if (GetRegisteredTool(hwnd_tip, candidate.hwnd, candidate.u_id, candidate.flags, result))
+        {
+            s_tool_info_cache[hwnd_tip] = result;
+            return true;
+        }
+    }
+    return false;
+}
 
 //按照字符数上限和行数上限从text的开头截取可以显示的部分（按整行截取）
 //返回值：是否发生了截断
@@ -152,25 +226,59 @@ CString CToolTipHelper::UpdateTipText(CToolTipCtrl& tool_tip, CWnd* p_wnd, const
     int omitted_chars{ 0 };
     CString limited_text{ LimitText(text, GetMaxTextLength(), GetMaxVisibleLines(p_wnd), &truncated, &omitted_chars) };
 
-    //注意：这里不能调用CToolTipCtrl::UpdateTipText，因为MFC在这个函数中调用
-    //ENSURE_ARG(AtlStrLen(lpszText) <= MAX_TIP_TEXT_LENGTH)检查了文本的长度，
-    //而MAX_TIP_TEXT_LENGTH的值为1024。文本超过这个长度时会抛出CInvalidArgException，
-    //该异常从窗口过程中逃出来以后，MFC会弹出一个内容为“遇到不适当的参数。”的对话框。
-    //这里直接向提示框控件发送TTM_UPDATETIPTEXT消息，以绕过这一限制。
-    //（这一段代码与CToolTipCtrl::UpdateTipText的实现等价，只是去掉了长度检查）
+    const HWND hwnd_tip{ tool_tip.GetSafeHwnd() };
     TOOLINFO tool_info{};
-    tool_info.cbSize = sizeof(TOOLINFO);
-    tool_info.uFlags = TTF_IDISHWND;        //工具是以窗口句柄标识的，与CToolTipCtrl::AddTool(CWnd*, ...)添加工具的方式一致
-    tool_info.hwnd = p_wnd->GetSafeHwnd();
-    tool_info.uId = reinterpret_cast<UINT_PTR>(p_wnd->GetSafeHwnd());
-    tool_info.lpszText = const_cast<LPTSTR>(limited_text.GetString());
-    ::SendMessage(tool_tip.GetSafeHwnd(), TTM_UPDATETIPTEXT, 0, reinterpret_cast<LPARAM>(&tool_info));
+    if (ResolveToolInfo(hwnd_tip, p_wnd, tool_info))
+    {
+        //注意：这里不能调用CToolTipCtrl::UpdateTipText，因为MFC在这个函数中调用了
+        //ENSURE_ARG(AtlStrLen(lpszText) <= MAX_TIP_TEXT_LENGTH)检查了文本的长度，
+        //而MAX_TIP_TEXT_LENGTH的值为1024。文本超过这个长度时会抛出CInvalidArgException，
+        //该异常从窗口过程中逃出来以后，MFC会弹出一个内容为“遇到不适当的参数。”的对话框。
+        //这里直接向提示框控件发送TTM_UPDATETIPTEXT消息，以绕过这一限制。
+        //（这一段代码与CToolTipCtrl::UpdateTipText的实现等价，只是去掉了长度检查）
+        tool_info.lpszText = const_cast<LPTSTR>(limited_text.GetString());
+        ::SendMessage(hwnd_tip, TTM_UPDATETIPTEXT, 0, reinterpret_cast<LPARAM>(&tool_info));
+    }
+    else
+    {
+        //没有找到已经注册的工具（正常情况下不会发生）。退回到MFC的实现，
+        //但要先把文本限制在MFC允许的长度以内，否则又会抛出CInvalidArgException
+        if (limited_text.GetLength() > MFC_MAX_TIP_TEXT_LENGTH)
+            limited_text = limited_text.Left(MFC_MAX_TIP_TEXT_LENGTH) + _T("…");
+        tool_tip.UpdateTipText(limited_text, p_wnd);
+    }
+
+    //只在第一次发生截断时记录一条日志，方便排查“提示长度上限没有按设置生效”之类的问题
+    if (truncated && !s_truncate_logged)
+    {
+        s_truncate_logged = true;
+        CString log_info;
+        log_info.Format(_T("鼠标提示文本被截断：原始长度 %d 个字符，上限 %d 个字符，省略 %d 个字符。"),
+            text.GetLength(), GetMaxTextLength(), omitted_chars);
+        CCommon::WriteLog(log_info, theApp.m_log_path.c_str());
+    }
 
     if (truncated)
         NotifyTruncated(GetMaxTextLength(), omitted_chars);
 
     return limited_text;
 }
+
+void CToolTipHelper::InitToolTip(CToolTipCtrl& tool_tip, CWnd* p_wnd)
+{
+    if (p_wnd == nullptr || !::IsWindow(p_wnd->GetSafeHwnd()) || !::IsWindow(tool_tip.GetSafeHwnd()))
+        return;
+
+    //注册工具这一步仍然交给MFC，保证提示框的显示、置顶、跟随等行为与改动前完全一致
+    tool_tip.AddTool(p_wnd, _T(""));
+
+    //注册完成后立刻探测并记住这次注册使用的TOOLINFO，
+    //这样后面发送TTM_UPDATETIPTEXT时才能精确匹配到这个工具
+    TOOLINFO tool_info{};
+    if (ResolveToolInfo(tool_tip.GetSafeHwnd(), p_wnd, tool_info))
+        s_tool_info_cache[tool_tip.GetSafeHwnd()] = tool_info;
+}
+
 
 void CToolTipHelper::ResetTruncatedNotification()
 {

@@ -1181,7 +1181,9 @@ BOOL CTrafficMonitorDlg::OnInitDialog()
     //初始化鼠标提示
     m_tool_tips.Create(this, TTS_ALWAYSTIP);
     m_tool_tips.SetMaxTipWidth(600);
-    m_tool_tips.AddTool(this, _T(""));
+    //不使用m_tool_tips.AddTool(this, _T(""))，改由CToolTipHelper注册工具并记住注册参数，
+    //这样后面更新超长提示文本时才能精确匹配到这个工具
+    CToolTipHelper::InitToolTip(m_tool_tips, this);
 
     //如果程序启动时设置了隐藏主窗口，或窗口的位置在左上角，则先将其不透明度设为0
     if (theApp.m_cfg_data.m_hide_main_window || (theApp.m_cfg_data.m_position_x == 0 && theApp.m_cfg_data.m_position_y == 0))

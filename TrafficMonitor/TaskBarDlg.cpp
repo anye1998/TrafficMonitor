@@ -1057,7 +1057,7 @@ BOOL CTaskBarDlg::OnInitDialog()
     if (IsWindow(GetSafeHwnd()) && m_tool_tips.Create(this, TTS_ALWAYSTIP) && IsWindow(m_tool_tips.GetSafeHwnd()))
     {
         m_tool_tips.SetMaxTipWidth(600);
-        m_tool_tips.AddTool(this, _T(""));
+        CToolTipHelper::InitToolTip(m_tool_tips, this);     //见CToolTipHelper::InitToolTip的说明
         SetToolTipsTopMost();       //设置提示信息总是置顶
     }
 

@@ -56,7 +56,7 @@ BOOL CToolTipSettingsDlg::OnInitDialog()
 
     //初始化提示文本长度上限
     m_max_length_edit.SetRange(static_cast<short>(TOOLTIP_TEXT_LENGTH_MIN), static_cast<short>(TOOLTIP_TEXT_LENGTH_MAX), 256);
-    m_max_length_edit.SetValue(m_data.tooltip_max_length);
+    SetMaxLengthCtrl(m_data.tooltip_max_length);
 
     CheckDlgButton(IDC_TOOLTIP_NOTIFY_TRUNCATED_CHK, m_data.tooltip_notify_truncated);
 
@@ -116,6 +116,47 @@ void CToolTipSettingsDlg::SetControlEnable()
     m_plugin_list.Invalidate();
 }
 
+void CToolTipSettingsDlg::SetMaxLengthCtrl(int value)
+{
+    if (value < TOOLTIP_TEXT_LENGTH_MIN)
+        value = TOOLTIP_TEXT_LENGTH_MIN;
+    if (value > TOOLTIP_TEXT_LENGTH_MAX)
+        value = TOOLTIP_TEXT_LENGTH_MAX;
+    m_max_length_edit.SetValue(value);      //微调按钮会同时更新编辑框中的文本
+    //微调按钮没有创建成功时（例如控件没有被DDX子类化），SetValue不会起作用，这里直接设置文本，
+    //保证编辑框中始终能看到当前的数值，避免用户以为设置没有生效
+    CString str_now;
+    m_max_length_edit.GetWindowText(str_now);
+    if (str_now.IsEmpty())
+    {
+        CString str_value;
+        str_value.Format(_T("%d"), value);
+        m_max_length_edit.SetWindowText(str_value);
+    }
+}
+
+int CToolTipSettingsDlg::GetMaxLengthFromCtrl()
+{
+    CString str;
+    m_max_length_edit.GetWindowText(str);
+    str.Trim();
+
+    //输入为空或含有非数字字符时，视为无效输入
+    if (str.IsEmpty())
+        return -1;
+    for (int i = 0; i < str.GetLength(); i++)
+    {
+        if (str[i] < _T('0') || str[i] > _T('9'))
+            return -1;
+    }
+
+    const int value{ _ttoi(str.GetString()) };
+    if (value < TOOLTIP_TEXT_LENGTH_MIN || value > TOOLTIP_TEXT_LENGTH_MAX)
+        return -2;      //超出允许的范围
+
+    return value;
+}
+
 void CToolTipSettingsDlg::OnBnClickedPluginCheck()
 {
     // TODO: 在此添加控件通知处理程序代码
@@ -129,7 +170,7 @@ void CToolTipSettingsDlg::OnBnClickedRestoreDefaultButton()
         CheckDlgButton(item.second, TRUE);
     CheckDlgButton(IDC_TOOLTIP_PLUGIN_CHK, TRUE);
     CheckDlgButton(IDC_TOOLTIP_NOTIFY_TRUNCATED_CHK, TRUE);
-    m_max_length_edit.SetValue(TOOLTIP_TEXT_LENGTH_DEFAULT);
+    SetMaxLengthCtrl(TOOLTIP_TEXT_LENGTH_DEFAULT);
     for (int i = 0; i < m_plugin_list.GetItemCount(); i++)
         m_plugin_list.SetCheck(i, TRUE);
     SetControlEnable();
@@ -163,13 +204,16 @@ void CToolTipSettingsDlg::OnOK()
     }
 
     //读取提示文本的长度上限
-    CString str_max_length;
-    m_max_length_edit.GetWindowText(str_max_length);
-    int max_length{ _ttoi(str_max_length.GetString()) };
-    if (max_length < TOOLTIP_TEXT_LENGTH_MIN)
-        max_length = TOOLTIP_TEXT_LENGTH_MIN;
-    if (max_length > TOOLTIP_TEXT_LENGTH_MAX)
-        max_length = TOOLTIP_TEXT_LENGTH_MAX;
+    //注意：输入无效时不能悄悄按最小值处理，否则用户会以为设置没生效（提示长度总是被限制在最小值）
+    const int max_length{ GetMaxLengthFromCtrl() };
+    if (max_length < 0)
+    {
+        MessageBox(CCommon::LoadTextFormat(IDS_TOOLTIP_LENGTH_INVALID, { TOOLTIP_TEXT_LENGTH_MIN, TOOLTIP_TEXT_LENGTH_MAX }),
+            nullptr, MB_ICONWARNING | MB_OK);
+        m_max_length_edit.SetFocus();
+        m_max_length_edit.SetSel(0, -1);
+        return;
+    }
     m_data.tooltip_max_length = max_length;
 
     m_data.tooltip_notify_truncated = (IsDlgButtonChecked(IDC_TOOLTIP_NOTIFY_TRUNCATED_CHK) != 0);

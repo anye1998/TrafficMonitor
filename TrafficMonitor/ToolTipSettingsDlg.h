@@ -28,6 +28,10 @@ protected:
     void InitCategoryCheck();
     void InitPluginList();
     void SetControlEnable();
+    //从编辑框中读取提示文本的长度上限。返回负数表示输入无效（-1: 不是数字或为空，-2: 超出允许范围）
+    int GetMaxLengthFromCtrl();
+    //让编辑框显示指定的长度值（即使微调按钮没有初始化也能显示）
+    void SetMaxLengthCtrl(int value);
 
     virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
     virtual BOOL OnInitDialog();

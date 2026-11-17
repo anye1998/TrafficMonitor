@@ -31,6 +31,12 @@ public:
     //返回值: 处理后的文本（如果没有超出限制则原样返回）
     static CString LimitText(const CString& text, int max_length, int max_lines, bool* truncated = nullptr, int* omitted_chars = nullptr);
 
+    //创建好提示框控件后调用，向提示框注册要显示提示的窗口
+    //不使用CToolTipCtrl::AddTool，是为了自己记录注册时使用的TOOLINFO（hwnd/uId），
+    //这样后面发送TTM_UPDATETIPTEXT时能够精确匹配到已经注册的工具，
+    //否则消息会静默失败，表现为鼠标提示完全不显示
+    static void InitToolTip(CToolTipCtrl& tool_tip, CWnd* p_wnd);
+
     //更新鼠标提示的文本，返回实际显示的文本
     //注意：这里不使用CToolTipCtrl::UpdateTipText，因为它限制了文本长度不能超过1024个字符
     static CString UpdateTipText(CToolTipCtrl& tool_tip, CWnd* p_wnd, const CString& text);
