@@ -159,6 +159,7 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 | 2026-11-17 | `V1.86-pawnio-r3` | 修复鼠标提示总长超过 1024 字符时弹出“遇到不适当的参数”：绕过 MFC 的 1024 限制并按省略号截断，新增“鼠标提示内容”设置（类别/插件/长度上限），提示框改为每次运行只弹一次；后续修复：改用 `InitToolTip()` 记录注册参数（修复提示完全不显示）、长度上限默认改为 1024、长度输入改为严格校验、修正设置界面文字被截断 | AI 助手（WorkBuddy） |
 | 2026-11-01 | `V1.86-pawnio-r2` | 右键菜单在“帮助”与“退出”之间新增“重启”，一键重启程序，方便调试插件（含配套新图标与 18 种语言文本） | AI 助手（WorkBuddy） |
 | 2026-11-17 | `V1.86-pawnio-r3` | 把“检查更新”的更新源从上游 `zhongyang219/TrafficMonitor` 改为本仓库 `anye1998/TrafficMonitor`，`version_utf8.info` 的下载地址改为本仓库的 Release 资产 | AI 助手（WorkBuddy） |
+| 2026-11-17 | `V1.90` | 删除 Gitee 更新源（只保留 GitHub）；版本号推进到 1.90；版本比较改为按数字分段比较（修正跨版本判断）；更新日志指向本仓库；插件更新同时读取本仓库与原项目的清单 | AI 助手（WorkBuddy） |
 
 ## 2026-10-25 · 硬件监控驱动迁移到 PawnIO
 
@@ -465,7 +466,7 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 | `version_utf8.info` | `<GitHub>` / `<Gitee>` 两段的下载地址改为本仓库 Release 资产：x64 标准版 → `V1.86-pawnio-r2_x64.zip`，x64 Lite 版 → `V1.86-pawnio-r2_x64_Lite.zip`；x86 / arm64ec 本仓库不产出，统一指向 releases 页面 |
 
 - 更新清单是从**默认分支 `master`** 读取的，所以这份 `version_utf8.info` 必须合并到 `master` 后，检查更新才会读到新内容。
-- 代码里仍保留“更新源：GitHub / Gitee”选项；本分支没有 Gitee 镜像，选 Gitee 时也会回退到 GitHub，不会导致检查更新不可用。
+- 该节最初还保留了“更新源：GitHub / Gitee”选项；随后在下一节中**已把 Gitee 更新源整体删除**，现在只有 GitHub 一个来源。
 
 ### 2. 发新版本时要改的三处
 
@@ -480,3 +481,61 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 1. 菜单「帮助 → 检查更新」或「选项设置 → 常规设置 → 检查更新」→ 应提示“已是最新版本”，不再出现“检查更新出错”；
 2. 断网/改错地址时应提示“检查更新出错”，说明确实是从本仓库拉取；
 3. 把 `<version>` 临时改成 `1.87` 再点检查更新 → 应弹出新版本提示，点“是”打开的下载页是本仓库的 Release。
+
+## 2026-11-17 · 更新源收敛为单一 GitHub、版本号 1.90
+
+**性质**：本 Fork 的本地修改，**由 AI 助手（WorkBuddy）完成**。
+
+### 1. 删除 Gitee 更新源
+
+| 位置 | 改动 |
+|---|---|
+| `TrafficMonitor/UpdateHelper.h/.cpp` | 删除 `UpdateSource` 枚举与 `SetUpdateSource()`；版本清单固定从 `raw.githubusercontent.com/anye1998/TrafficMonitor/master/version_utf8.info` 获取（失败回退 `github.com/.../blob/master/...`）；清单里的 `<GitHub>` 段直接按 `GitHub` 解析 |
+| `CommonData.h` | 删除 `GeneralSettingData::update_source` 字段 |
+| `TrafficMonitor.cpp` | 删除该字段的配置读写与 `SetUpdateSource` 调用 |
+| `GeneralSettingsDlg.h/.cpp` | 删除“更新源”标签与 GitHub/Gitee 两个单选按钮、对应消息处理与“取消时恢复更新源”的逻辑 |
+| `TrafficMonitor.rc` / `resource.h` | 删除 `IDC_UPDATE_SORUCE_STATIC`、`IDC_GITHUB_RADIO`、`IDC_GITEE_RADIO`；语言行上移，设置分组框由 90 收紧到 64，避免留下空档 |
+| `OptionsDlg.h/.cpp` | 删除 `OnCancel()` 重写（其唯一作用是取消时恢复更新源） |
+| `PluginManagerDlg.cpp` / `SkinDlg.cpp` | “插件下载”“皮肤下载”链接不再按更新源跳转 Gitee |
+| `PluginUpdateHelper.cpp` | 不再判断更新源（改为双源，见第 3 节） |
+| `version_utf8.info` | 删除 `<Gitee>` 段 |
+
+> 老配置里的 `[general] update_source` 会被直接忽略，不影响启动。
+
+### 2. 版本号 1.90 与版本比较
+
+- `TrafficMonitor/stdafx.h` 的 `VERSION`：`1.86` → `1.90`；
+- `TrafficMonitor.rc` 的 `FILEVERSION` / `PRODUCTVERSION` / `FileVersion` / `ProductVersion`：`1.8.6.0` → `1.9.0.0`；
+- `version_utf8.info`、`version.info` 的 `<version>`：`1.90`。
+
+**版本比较不再用字符串比较**。原实现是 `if (version > VERSION)`，即 `std::wstring` 的字典序比较，存在三个坑：
+
+| A（服务器） | B（本地） | 字符串比较 | 按数字分段 | 说明 |
+|---|---|---|---|---|
+| 1.90 | 1.86 | A > B ✅ | A > B ✅ | 跨版本升级判断正确（本次 1.86 → 1.90 就靠这条） |
+| 1.9 | 1.10 | **A > B ❌** | A < B ✅ | 字典序认为 "1.10" < "1.9"，会漏掉更新 |
+| 1.90 | 1.90.0 | **A < B ❌** | A = B ✅ | 多写一位小数就被当成“有更新” |
+| 1.86-pawnio-r2 | 1.86 | **A > B ❌** | A = B ✅ | 后缀 `-pawnio-rN` 被当成更大版本，会一直误报 |
+
+新增 `CCommon::CompareVersion(a, b)`：按 `.` 分段、逐段按数值比较、缺段补 0、段内遇到非数字即停止（因此 `1.86-pawnio-r2` 等价于 `1.86`）。
+
+### 3. 更新日志与插件更新源
+
+| 菜单/功能 | 指向 |
+|---|---|
+| 更新日志（`OnUpdateLog`） | 本仓库 `https://github.com/anye1998/TrafficMonitor/blob/master/UpdateLog/update_log*.md` |
+| 帮助菜单（`OnHelp`）、常见问题（`OnFrequentyAskedQuestions`） | **保持上游不变**（`zhongyang219/TrafficMonitor` 的 wiki 与 Help.md） |
+| 插件更新检查（`CPluginUpdateHelper::CheckForUpdate`） | **双源**：先读本仓库 `anye1998/TrafficMonitorPlugins` 的 `plugins_version.xml`，再读原项目 `zhongyang219/TrafficMonitorPlugins` 的同一文件，两份清单合并；同名插件取版本号较大者，任一仓库发布新版本都能检测到 |
+
+### 4. 发版注意
+
+`version_utf8.info` 里的 `<version>` 现在是 `1.90`，与 `VERSION` 一致，所以“检查更新”显示“已是最新版本”。
+发布 1.90 时记得把 `link_x64` / `link_without_temperature_x64` 换成 1.90 的资产文件名
+（现在是 `V1.86-pawnio-r2` 的资产，只影响旧版本用户点“下载”时拿到的文件）。
+
+### 5. 验证
+
+1. 「选项设置 → 常规设置」里不应再有“更新源”一行，且“语言”紧跟在“立即检查”下方，分组框内无空档；
+2. 「帮助 → 检查更新」应提示“已是最新版本”（`<version>` 与 `VERSION` 都是 1.90）；
+3. 把 `version_utf8.info` 的 `<version>` 临时改成 `1.91` → 应提示新版本，改回 `1.90` 后不再提示；
+4. 插件管理里“检查更新”应能同时看到两个仓库的插件版本（例如本仓库有 MouseStatus 的新版本）。
