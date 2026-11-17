@@ -5,14 +5,7 @@ public:
     CUpdateHelper();
     ~CUpdateHelper();
 
-    enum class UpdateSource
-    {
-        GitHubSource,
-        GiteeSource
-    };
-
-    void SetUpdateSource(UpdateSource update_source);
-
+    //检查更新。版本清单固定从本仓库（GitHub）获取，不再区分 GitHub/Gitee 更新源
     bool CheckForUpdate();
 
     const std::wstring& GetVersion() const;
@@ -36,5 +29,4 @@ private:
     std::wstring m_contents_zh_cn;
     std::wstring m_contents_zh_tw;
     bool m_row_data{ true };
-    UpdateSource m_update_source{ UpdateSource::GitHubSource };
 };

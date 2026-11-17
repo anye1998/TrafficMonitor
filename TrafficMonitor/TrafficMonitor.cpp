@@ -74,8 +74,6 @@ void CTrafficMonitorApp::LoadConfig()
     //m_general_data.allow_skin_cover_font = ini.GetBool(_T("general"), _T("allow_skin_cover_font"), true);
     //m_general_data.allow_skin_cover_text = ini.GetBool(_T("general"), _T("allow_skin_cover_text"), true);
     m_general_data.show_all_interface = ini.GetBool(L"general", L"show_all_interface", false);
-    bool is_chinese_language{ m_str_table.IsSimplifiedChinese() };     //当前语言是否为简体中文
-    m_general_data.update_source = ini.GetInt(L"general", L"update_source", is_chinese_language ? 1 : 0);   //如果当前语言为简体，则默认更新源为Gitee，否则为GitHub
     m_general_data.cpu_usage_acquire_method = static_cast<GeneralSettingData::CpuUsageAcquireMethod>(ini.GetInt(L"general", L"cpu_usage_acquire_method", GeneralSettingData::CA_PDH));
     m_general_data.monitor_time_span = ini.GetInt(L"general", L"monitor_time_span", 1000);
     if (m_general_data.monitor_time_span < MONITOR_TIME_SPAN_MIN || m_general_data.monitor_time_span > MONITOR_TIME_SPAN_MAX)
@@ -309,7 +307,6 @@ void CTrafficMonitorApp::SaveConfig()
     //ini.WriteBool(_T("general"), _T("allow_skin_cover_font"), m_general_data.allow_skin_cover_font);
     //ini.WriteBool(_T("general"), _T("allow_skin_cover_text"), m_general_data.allow_skin_cover_text);
     ini.WriteString(_T("general"), _T("language"), m_general_data.language.toConfigString());
-    ini.WriteInt(L"general", L"update_source", m_general_data.update_source);
     ini.WriteBool(L"general", L"show_all_interface", m_general_data.show_all_interface);
     ini.WriteInt(L"general", L"cpu_usage_acquire_method", m_general_data.cpu_usage_acquire_method);
     ini.WriteInt(L"general", L"monitor_time_span", m_general_data.monitor_time_span);
@@ -561,7 +558,6 @@ void CTrafficMonitorApp::CheckUpdate(bool message)
     wstring contents_en;    //更新内容（English）
     wstring contents_zh_tw; //更新内容（繁体中文）
     CUpdateHelper update_helper;
-    update_helper.SetUpdateSource(static_cast<CUpdateHelper::UpdateSource>(m_general_data.update_source));
     if (!update_helper.CheckForUpdate())
     {
         if (message)
@@ -591,7 +587,9 @@ void CTrafficMonitorApp::CheckUpdate(bool message)
         }
         return;
     }
-    if (version > VERSION)      //如果服务器上的版本大于本地版本
+    //如果服务器上的版本大于本地版本。这里按“数字分段”比较，而不是按字符串比较，
+    //否则像 1.9 和 1.10 这种跨版本的比较会出错（字符串比较会认为 "1.10" < "1.9"）
+    if (CCommon::CompareVersion(version, VERSION) > 0)
     {
         CString info;
         //根据语言设置选择对应语言版本的更新内容
@@ -1375,18 +1373,14 @@ void CTrafficMonitorApp::OnHelp()
 void CTrafficMonitorApp::OnFrequentyAskedQuestions()
 {
     // TODO: 在此添加命令处理程序代码
-    CString url_domain;
-    if (static_cast<CUpdateHelper::UpdateSource>(m_general_data.update_source) == CUpdateHelper::UpdateSource::GiteeSource)
-        url_domain = _T("gitee.com");
-    else
-        url_domain = _T("github.com");
+    //“帮助”菜单里的内容仍然指向上游项目，本分支不做改动
     CString file_name;
     if (m_str_table.IsSimplifiedChinese())
         file_name = _T("Help.md");
     else
         file_name = _T("Help_en-us.md");
     CString url;
-    url.Format(_T("https://%s/zhongyang219/TrafficMonitor/blob/master/%s"), url_domain.GetString(), file_name.GetString());
+    url.Format(_T("https://github.com/zhongyang219/TrafficMonitor/blob/master/%s"), file_name.GetString());
     ShellExecute(NULL, _T("open"), url, NULL, NULL, SW_SHOW);
 }
 
@@ -1394,11 +1388,7 @@ void CTrafficMonitorApp::OnFrequentyAskedQuestions()
 void CTrafficMonitorApp::OnUpdateLog()
 {
     // TODO: 在此添加命令处理程序代码
-    CString url_domain;
-    if (static_cast<CUpdateHelper::UpdateSource>(m_general_data.update_source) == CUpdateHelper::UpdateSource::GiteeSource)
-        url_domain = _T("gitee.com");
-    else
-        url_domain = _T("github.com");
+    //更新日志使用本仓库的文件
     wstring language_tag = m_str_table.GetLanguageInfo().bcp_47;
     CString file_name;
     if (language_tag == L"zh-CN")
@@ -1408,7 +1398,7 @@ void CTrafficMonitorApp::OnUpdateLog()
     else
         file_name = _T("update_log_en-us.md");
     CString url;
-    url.Format(_T("https://%s/zhongyang219/TrafficMonitor/blob/master/UpdateLog/%s"), url_domain.GetString(), file_name.GetString());
+    url.Format(_T("https://github.com/anye1998/TrafficMonitor/blob/master/UpdateLog/%s"), file_name.GetString());
     ShellExecute(NULL, _T("open"), url, NULL, NULL, SW_SHOW);
 }
 

@@ -33,6 +33,13 @@ public:
     static bool StringTransform(std::string& str, bool upper);
     static bool StringTransform(std::wstring& str, bool upper);
 
+    //比较两个版本号字符串的大小（例如 "1.90" 和 "1.86"）
+    //规则：按'.'分段后逐段按数值比较，缺少的段按0处理；
+    //段内遇到非数字字符（如"86-pawnio-r2"中的"-"）时只取前面的数字，因此
+    //"1.90" > "1.86"、"1.10" > "1.9"、"1.90" == "1.90.0" 都能得到正确结果。
+    //返回值：version1 大于 version2 返回1，小于返回-1，相等返回0
+    static int CompareVersion(const std::wstring& version1, const std::wstring& version2);
+
     //读取文件内容
     static bool GetFileContent(const wchar_t* file_path, string& contents_buff, bool binary = true);
 

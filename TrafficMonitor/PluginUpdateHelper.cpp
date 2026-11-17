@@ -89,31 +89,43 @@ int PluginVersion::GetSubVersion(size_t index) const
 bool CPluginUpdateHelper::CheckForUpdate()
 {
     m_latest_versions.clear();
-    std::wstring url;
-    //更新源为Gitee
-    if (theApp.m_general_data.update_source == 1)
-        url = L"https://gitee.com/zhongyang219/TrafficMonitorPlugins/raw/main/plugins_version.xml";
-    //更新源为Github
-    else
-        url = L"https://raw.githubusercontent.com/zhongyang219/TrafficMonitorPlugins/main/plugins_version.xml";
 
-    //获取url内容
-    std::string version_info;
-    if (CCommon::GetURL(url, version_info))
+    //同时从两个仓库获取插件版本清单：
+    //  1. 本仓库（anye1998/TrafficMonitorPlugins）：本分支维护的插件（例如 MouseStatus）的新版本会先出现在这里；
+    //  2. 原项目（zhongyang219/TrafficMonitorPlugins）：其余插件仍然沿用原项目的清单。
+    //两个清单里都出现的插件，取版本号较大的那个，因此任一仓库发布新版本都能被检测到。
+    const std::wstring plugin_version_urls[] = {
+        L"https://raw.githubusercontent.com/anye1998/TrafficMonitorPlugins/main/plugins_version.xml",
+        L"https://raw.githubusercontent.com/zhongyang219/TrafficMonitorPlugins/main/plugins_version.xml",
+    };
+
+    bool succeed{ false };
+    for (const auto& url : plugin_version_urls)
     {
-        //解析xml，获取版本信息
-        tinyxml2::XMLDocument doc;
-        doc.Parse(version_info.c_str(), version_info.size());
-        //遍历插件版本
-        CTinyXml2Helper::IterateChildNode(doc.RootElement(), [&](tinyxml2::XMLElement* ele) {
-            std::wstring file_name = CCommon::StrToUnicode(CTinyXml2Helper::ElementAttribute(ele, "file_name"));
-            std::string plugin_version(CTinyXml2Helper::ElementAttribute(ele, "version"));
-            PluginVersion version(plugin_version);
-            m_latest_versions.emplace(file_name, version);
-        });
-        return true;
+        std::string version_info;
+        if (!CCommon::GetURL(url, version_info))       //获取url内容
+            continue;
+        succeed = true;
+        ParsePluginVersionInfo(version_info);
     }
-    return false;
+    return succeed;
+}
+
+void CPluginUpdateHelper::ParsePluginVersionInfo(const std::string& version_info)
+{
+    tinyxml2::XMLDocument doc;
+    doc.Parse(version_info.c_str(), version_info.size());
+    //遍历插件版本
+    CTinyXml2Helper::IterateChildNode(doc.RootElement(), [&](tinyxml2::XMLElement* ele) {
+        std::wstring file_name = CCommon::StrToUnicode(CTinyXml2Helper::ElementAttribute(ele, "file_name"));
+        std::string plugin_version(CTinyXml2Helper::ElementAttribute(ele, "version"));
+        PluginVersion version(plugin_version);
+        auto iter = m_latest_versions.find(file_name);
+        if (iter == m_latest_versions.end())
+            m_latest_versions.emplace(file_name, version);
+        else if (iter->second < version)        //两个清单里都有时，取版本较大的
+            iter->second = version;
+    });
 }
 
 const PluginVersion& CPluginUpdateHelper::GetPluginLatestVersions(const std::wstring& file_name) const

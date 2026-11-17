@@ -182,6 +182,49 @@ bool CCommon::StringTransform(std::wstring& str, bool upper)
     return _StringTransform(str, upper);
 }
 
+//把一个版本号字符串拆成一组整数（"1.90" -> {1,90}，"1.86-pawnio-r2" -> {1,86}）
+static void VersionToNumbers(const std::wstring& version, std::vector<int>& numbers)
+{
+    numbers.clear();
+    std::vector<std::wstring> parts;
+    CCommon::StringSplit(version, L'.', parts);
+    for (const auto& part : parts)
+    {
+        int value{};
+        bool has_digit{ false };
+        for (wchar_t ch : part)
+        {
+            if (ch >= L'0' && ch <= L'9')
+            {
+                value = value * 10 + static_cast<int>(ch - L'0');
+                has_digit = true;
+            }
+            else
+            {
+                break;      //遇到非数字字符（如"86-pawnio-r2"中的'-'）时，只取前面的数字
+            }
+        }
+        numbers.push_back(has_digit ? value : 0);
+    }
+}
+
+int CCommon::CompareVersion(const std::wstring& version1, const std::wstring& version2)
+{
+    std::vector<int> numbers1, numbers2;
+    VersionToNumbers(version1, numbers1);
+    VersionToNumbers(version2, numbers2);
+
+    const size_t count{ numbers1.size() > numbers2.size() ? numbers1.size() : numbers2.size() };
+    for (size_t i{}; i < count; i++)
+    {
+        const int value1{ i < numbers1.size() ? numbers1[i] : 0 };      //缺少的段按0处理
+        const int value2{ i < numbers2.size() ? numbers2[i] : 0 };
+        if (value1 != value2)
+            return value1 > value2 ? 1 : -1;
+    }
+    return 0;
+}
+
 bool CCommon::GetFileContent(const wchar_t* file_path, string& contents_buff, bool binary /*= true*/)
 {
     std::ifstream file{ file_path, (binary ? std::ios::binary : std::ios::in) };

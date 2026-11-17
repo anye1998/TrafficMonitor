@@ -373,7 +373,6 @@ enum ToolTipCategory : unsigned int
 struct GeneralSettingData
 {
     bool check_update_when_start{ true };
-    int update_source{};                    //更新源。0: GitHub; 1: Gitee
     bool auto_run{ false };
     bool auto_run_by_task_scheduler{ false };   //是否通过任务计划程序实现开机自启
     bool show_notify_icon{ true };    //显示通知区域图标

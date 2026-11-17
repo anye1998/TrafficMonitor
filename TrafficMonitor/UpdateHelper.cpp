@@ -13,51 +13,34 @@ CUpdateHelper::~CUpdateHelper()
 {
 }
 
-void CUpdateHelper::SetUpdateSource(UpdateSource update_source)
-{
-    m_update_source = update_source;
-}
-
 bool CUpdateHelper::CheckForUpdate()
 {
     wstring version_info;
-    //使用GitHub更新源
-    if (m_update_source == UpdateSource::GitHubSource)
+    //版本清单固定从本仓库（GitHub）获取
+    if (CCommon::GetURL(L"https://raw.githubusercontent.com/anye1998/TrafficMonitor/master/version_utf8.info", version_info, true))     //获取版本信息
     {
-        if (CCommon::GetURL(L"https://raw.githubusercontent.com/anye1998/TrafficMonitor/master/version_utf8.info", version_info, true))     //获取版本信息
-        {
-            m_row_data = true;
-        }
-        else if (CCommon::GetURL(L"https://github.com/anye1998/TrafficMonitor/blob/master/version_utf8.info", version_info, true))      //获取版本信息
-        {
-            m_row_data = false;
-        }
-        else
-        {
-            return false;
-        }
-
-        if (!m_row_data)
-        {
-            size_t index = version_info.find(L"﻿&lt;version&gt;");
-            if (index != std::wstring::npos)
-                version_info = version_info.substr(index);
-
-            CString str_version_info = version_info.c_str();
-            str_version_info.Replace(L"&lt;", L"<");
-            str_version_info.Replace(L"&gt;", L">");
-
-            version_info = str_version_info;
-        }
+        m_row_data = true;
     }
-    //使用Gitee更新源
+    else if (CCommon::GetURL(L"https://github.com/anye1998/TrafficMonitor/blob/master/version_utf8.info", version_info, true))      //获取版本信息
+    {
+        m_row_data = false;
+    }
     else
     {
-        //本分支目前没有 Gitee 镜像，Gitee 源先尝试 gitee.com（以后建了镜像就会生效），
-        //失败时回退到 GitHub 上的同一个文件，避免“更新源”选成 Gitee 之后检查更新直接不可用
-        if (!CCommon::GetURL(L"https://gitee.com/anye1998/TrafficMonitor/raw/master/version_utf8.info", version_info, true)
-            && !CCommon::GetURL(L"https://raw.githubusercontent.com/anye1998/TrafficMonitor/master/version_utf8.info", version_info, true))
-            return false;
+        return false;
+    }
+
+    if (!m_row_data)
+    {
+        size_t index = version_info.find(L"﻿&lt;version&gt;");
+        if (index != std::wstring::npos)
+            version_info = version_info.substr(index);
+
+        CString str_version_info = version_info.c_str();
+        str_version_info.Replace(L"&lt;", L"<");
+        str_version_info.Replace(L"&gt;", L">");
+
+        version_info = str_version_info;
     }
 
     ParseUpdateInfo(version_info);
@@ -85,7 +68,8 @@ void CUpdateHelper::ParseUpdateInfo(wstring version_info)
         }
     }
 
-    wstring str_source_tag = (m_update_source == UpdateSource::GitHubSource ? L"GitHub" : L"Gitee");
+    //版本清单中只保留 GitHub 一段，不再有 GitHub/Gitee 之分
+    wstring str_source_tag = L"GitHub";
     wstring str_link_tag, str_link_tag_x64, str_link_tag_arm64ec;
 #ifdef WITHOUT_TEMPERATURE
     str_link_tag = L"link_without_temperature";
