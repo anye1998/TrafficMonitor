@@ -502,6 +502,10 @@ powershell -ExecutionPolicy Bypass -File .\HardwareMonitor-PawnIO\deploy.ps1 -Ta
 
 > 老配置里的 `[general] update_source` 会被直接忽略，不影响启动。
 
+> 注：删除这两个单选按钮时曾误把“自动运行”分组框里的 `IDC_AUTO_RUN_CHECK`（`14,117`）和
+> `IDC_RESET_AUTO_RUN_BUTTON`（`160,115`）一并上移到 `78/76`，导致“重置开机自动运行”按钮压住右列
+> “显示”分组框里的“显示通知区图标”（提交 `d1b0c48` 已恢复原坐标）。
+
 ### 2. 版本号 1.90 与版本比较
 
 - `TrafficMonitor/stdafx.h` 的 `VERSION`：`1.86` → `1.90`；
